@@ -20,6 +20,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE = os.path.join(ROOT, "site")
 PAGES = os.path.join(SITE, "pages")
 
+# Pages that were merged away: each writes a tiny meta-refresh stub pointing at
+# the live location so inbound links and bookmarks keep working.
+REDIRECTS = {
+    "oil-tank-emissions.html": "tank-farms.html",
+    "vocs.html": "tank-farms.html#health-effects-of-vocs",
+}
+
 META_RE = re.compile(r'<!--\s*meta:\s*title="(?P<title>[^"]*)"\s*\|\s*desc="(?P<desc>[^"]*)"\s*-->\s*\n?')
 
 NAV_BODY = """
@@ -38,12 +45,17 @@ NAV_BODY = """
         <li class="nav-cta"><a href="act-now.html">Act Now</a></li>
         <li><a href="about.html">About</a></li>
         <li class="has-sub">
-          <a href="our-campaigns.html">Our Campaigns</a>
+          <a href="our-campaigns.html">Active Campaigns</a>
           <ul class="submenu">
-            <li><a href="index.html#tank-farms">South Portland Tank Farms</a></li>
+            <li><a href="tank-farms.html">South Portland Tank Farms</a></li>
             <li><a href="coastal-flooding.html">Coastal Flooding</a></li>
+          </ul>
+        </li>
+        <li class="has-sub">
+          <a href="past-work.html">Past Work</a>
+          <ul class="submenu">
+            <li><a href="past-work.html">Campaign archive</a></li>
             <li><a href="yard-south-proposal.html">Yard South Proposal</a></li>
-            <li><a href="oil-tank-emissions.html">Oil Tank Emissions</a></li>
             <li><a href="clear-skies.html">Clear Skies</a></li>
             <li><a href="fertilizer-ban.html">Fertilizer Ban</a></li>
             <li><a href="pesticides.html">Pesticides</a></li>
@@ -73,13 +85,13 @@ FOOTER_BODY = """
       <ul>
         <li><a href="index.html">Home</a></li>
         <li><a href="about.html">About</a></li>
-        <li><a href="our-campaigns.html">Our campaigns</a></li>
-        <li><a href="oil-tank-emissions.html">Oil tank emissions</a></li>
+        <li><a href="our-campaigns.html">Active campaigns</a></li>
+        <li><a href="tank-farms.html">Tank farms</a></li>
+        <li><a href="coastal-flooding.html">Coastal flooding</a></li>
+        <li><a href="past-work.html">Past work</a></li>
+        <li><a href="yard-south-proposal.html">Yard South Proposal</a></li>
         <li><a href="clear-skies.html">Clear Skies</a></li>
         <li><a href="pesticides.html">Pesticides</a></li>
-        <li><a href="coastal-flooding.html">Coastal flooding</a></li>
-        <li><a href="yard-south-proposal.html">Yard South Proposal</a></li>
-        <li><a href="past-work.html">Past work</a></li>
         <li><a href="newsletter.html">Newsletter</a></li>
         <li><a href="get-involved.html">Get involved</a></li>
         <li><a href="donate.html">Donate</a></li>
@@ -138,6 +150,14 @@ def build(out_dir: str) -> list:
         dest = os.path.join(out_dir, name)
         open(dest, "w", encoding="utf-8").write(html)
         written.append(name)
+    for old, new in sorted(REDIRECTS.items()):
+        open(os.path.join(out_dir, old), "w", encoding="utf-8").write(
+            '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            f'<meta http-equiv="refresh" content="0; url={new}">\n'
+            f'<title>Redirecting to {new}</title>\n'
+            f'<link rel="canonical" href="{new}">\n</head>\n'
+            f'<body><p>This page moved to <a href="{new}">{new}</a>.</p></body>\n</html>\n')
+        written.append(old)
     shutil.copy(os.path.join(SITE, "styles.css"), os.path.join(out_dir, "styles.css"))
     shutil.copytree(os.path.join(SITE, "assets"), os.path.join(out_dir, "assets"), dirs_exist_ok=True)
     print("pages:", ", ".join(written))

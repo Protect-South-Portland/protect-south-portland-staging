@@ -118,11 +118,46 @@ def test_expected_pages_built(docs):
         "coastal-flooding.html", "yard-south-proposal.html", "oil-tank-emissions.html",
         "clear-skies.html", "fertilizer-ban.html", "pesticides.html", "vocs.html",
         "newsletter.html", "get-involved.html", "donate.html", "contact.html",
-        "404.html", "past-work.html",
+        "404.html", "past-work.html", "tank-farms.html",
     ):
         assert expected in names, expected
     assert "styles.css" in os.listdir(docs)
     assert os.path.exists(os.path.join(docs, "assets", "psp-logo.png"))
+
+
+# merged campaign pages write tiny meta-refresh stubs instead of full shells;
+# shell-level tests skip them.
+REDIRECT_PAGES = {"oil-tank-emissions.html", "vocs.html"}
+
+
+def test_merged_redirects(docs):
+    stub = read(docs, "oil-tank-emissions.html")
+    assert 'url=tank-farms.html' in stub and "content=\"0; url=" in stub
+    stub2 = read(docs, "vocs.html")
+    assert "tank-farms.html#health-effects-of-vocs" in stub2
+    # stubs must not be full shells
+    for name in REDIRECT_PAGES:
+        page = read(docs, name)
+        assert 'class="masthead"' not in page and len(page) < 800, name
+
+
+def test_nav_structure_after_split(docs):
+    for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue
+        m = re.search(r'<nav class="main-nav".*?</nav>', read(docs, name), re.S)
+        nav = m.group(0)
+        assert "Active Campaigns" in nav, name
+        assert "Past Work" in nav, name
+        assert "Our Campaigns" not in nav, name
+        assert "oil-tank-emissions.html" not in nav, name
+        assert "vocs.html" not in nav, name
+        assert 'href="tank-farms.html"' in nav, name
+    tf = read(docs, "tank-farms.html")
+    assert '<h1>South Portland Tank Farms</h1>' in tf
+    assert EMBED_URL in tf
+    assert 'id="health-effects-of-vocs"' in tf
+    assert "assets/files/hem3-report-summary.pdf" in tf
 
 
 def test_row5_banner_verbatim_on_homepage(docs):
@@ -201,6 +236,8 @@ def test_favicon_present(docs):
     favicon = os.path.join(docs, "assets", "psp-favicon.png")
     assert os.path.exists(favicon)
     for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue
         assert 'href="assets/psp-favicon.png"' in read(docs, name), name
 
 
@@ -212,6 +249,8 @@ def test_cname_ready_for_domain_flip(docs):
 
 def test_every_page_shell_complete(docs):
     for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue
         page = read(docs, name)
         assert '<html lang="en">' in page, name
         assert "<title>" in page, name
@@ -323,23 +362,26 @@ def test_past_work_archives_and_nav_exclusion(docs):
     assert "Yard South proposal, 2023&ndash;2024" in pw
     assert 'href="yard-south-proposal.html"' in pw
     assert "Comprehensive Plan for South Portland is mandated" in pw
-    for name in html_files(docs):
-        page = read(docs, name)
-        m = re.search(r'<nav class="main-nav".*?</nav>', page, re.S)
-        assert m, name
-        assert "past-work.html" not in m.group(0), f"{name}: past-work must stay out of the header nav"
+    # promoted into the header nav by the pre-workshop restructure (was footer-only)
+    page = read(docs, "contact.html")
+    m = re.search(r'<nav class="main-nav".*?</nav>', page, re.S)
+    assert m and 'href="past-work.html"' in m.group(0)
     # footer carries the archive link
-    assert 'href="past-work.html"' in read(docs, "contact.html")
+    assert 'href="past-work.html"' in page
 
 
 def test_act_now_in_header_nav(docs):
     for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue
         m = re.search(r'<nav class="main-nav".*?</nav>', read(docs, name), re.S)
         assert m and 'href="act-now.html"' in m.group(0), name
 
 
 def test_dated_footer_strip_every_page(docs):
     for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue
         page = read(docs, name)
         assert DATED_PHRASE in page, name
         assert DATED_COMMENT in page, name
@@ -370,7 +412,7 @@ def test_about_tense_fixes(docs):
 
 
 def test_where_things_stand_section(docs):
-    ot = read(docs, "oil-tank-emissions.html")
+    ot = read(docs, "tank-farms.html")
     assert "Where things stand &mdash; October 2026" in ot
     assert "southportland.gov/522/Air-Quality-Concerns-Monitoring" in ot
     assert "DocumentCenter/View/5116" in ot

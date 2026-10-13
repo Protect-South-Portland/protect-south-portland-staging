@@ -28,10 +28,10 @@ for W in 412 768 1440; do
 "const p = await browser.getPage('main');
 await p.goto('about:blank');
 await p.evaluate(() => { document.body.innerHTML = '<iframe id=f style=\"width:${W}px;height:${IFRAME_H}px;border:0;display:block\" src=\"${BASE}${PAGE}?vc=' + Date.now() + '\"></iframe>'; });
-await new Promise(r => setTimeout(r, 3500));
+await new Promise(r => setTimeout(r, 6000));
 await p.screenshot({path: '$OUT/${W}_${NAME}_full.png', fullPage: true});" \
       --json >/dev/null 2>&1
-    python3 - "$OUT/${W}_${NAME}_full.png" "$W" "$NAME" <<'PYEOF'
+    uv run --with pillow python3 - "$OUT/${W}_${NAME}_full.png" "$W" "$NAME" <<'PYEOF'
 import sys
 from PIL import Image
 path, w, name = sys.argv[1], sys.argv[2], sys.argv[3]

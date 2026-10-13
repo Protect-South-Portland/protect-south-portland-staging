@@ -12,7 +12,10 @@ Builds site/pages into a temp dir via tools/build.py and pins the hard rules:
   GitHub repo — anywhere in the generated HTML.
 - Ledger row 9 (constraint): no mention of the Oct 15 community assembly, ever.
 - Site hygiene: internal links resolve, external links use an allowlist, every
-  page has a title/description, and photo/logo placeholders stay non-copying.
+  page has a title/description, and every image resolves locally with alt text.
+- Photography and graphics are copied from the live Wix site into
+  site/assets/photos (operator directive 2026-10-13) and served locally; hotlinking
+  static.wixstatic.com is banned by test_no_wix_assets_copied.
 """
 
 import os
@@ -173,8 +176,31 @@ def test_row1_no_private_links_anywhere(docs):
 
 
 def test_no_wix_assets_copied(docs):
+    """Images from the live site are served locally; never hotlink wixstatic."""
     all_html = "\n".join(read(docs, n) for n in html_files(docs))
     assert "static.wixstatic.com" not in all_html
+
+
+def test_images_resolve_and_have_alt(docs):
+    img_re = re.compile(r"<img\b[^>]*>")
+    src_re = re.compile(r'src="([^"]+)"')
+    alt_re = re.compile(r'alt="([^"]*)"')
+    for name in html_files(docs):
+        for tag in img_re.findall(read(docs, name)):
+            src_m = src_re.search(tag)
+            assert src_m, f"{name}: img without src"
+            src = src_m.group(1)
+            assert not src.startswith("http"), f"{name}: images must be local, got {src}"
+            alt_m = alt_re.search(tag)
+            assert alt_m and alt_m.group(1).strip(), f"{name}: img without alt text: {src}"
+            assert os.path.exists(os.path.join(docs, src)), f"{name}: missing image file {src}"
+
+
+def test_favicon_present(docs):
+    favicon = os.path.join(docs, "assets", "psp-favicon.png")
+    assert os.path.exists(favicon)
+    for name in html_files(docs):
+        assert 'href="assets/psp-favicon.png"' in read(docs, name), name
 
 
 def test_cname_ready_for_domain_flip(docs):

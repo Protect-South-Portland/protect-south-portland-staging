@@ -389,6 +389,54 @@ blockquote {
   font-size: 0.85rem;
 }
 
+/* ---------- photography (copied from the live Wix site assets) ---------- */
+
+.hero-band {
+  min-height: 320px;
+  background-position: center 40%;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+@media (max-width: 700px) { .hero-band { min-height: 190px; } }
+
+.figure { margin: 24px 0; }
+
+.figure img {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+}
+
+.figure figcaption {
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.figure--half { max-width: 620px; }
+
+/* campaign cards with a photo head */
+
+.card--photo { padding: 0 0 4px; }
+
+.card--photo .card__img {
+  display: block;
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 13px 13px 0 0;
+}
+
+.card--photo .card__body { padding: 16px 20px 12px; }
+
+.card--photo h3 { margin: 0 0 8px; }
+
+.card--photo p { color: var(--muted); font-size: 0.95rem; flex: 1; }
+
+.card--photo .card__more { display: inline-block; padding-bottom: 12px; }
+
 /* ---------- TODO placeholder blocks (operator decisions) ---------- */
 
 .todo {

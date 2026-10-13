@@ -41,8 +41,8 @@ All appear as dashed orange `.todo` blocks on the live-looking pages:
 2. **Newsletter (newsletter.html)** — subscribe form needs a form service (or mailto bridge already shown); archive PDFs still live on Wix and should be mirrored into this repo.
 3. **Contact (contact.html)** — Wix contact form replaced with the email address; embed a form when a hosted service exists.
 4. **Final public map graphic (homepage)** — swap the placeholder box for the graphic Mindy and Nate finalize.
-5. **Photos/graphics** — none of the original Wix photography is copied (photography credits remain in the footer). Dashed "Photo placeholder" blocks mark where licensed images can be added.
-6. **Local Hero Award video (about.html)** — original plays inside Wix; link/embed a hosted copy when available.
+5. ~~Photos/graphics~~ RESOLVED 2026-10-13 — the photography and graphics from the live Wix site are copied into `site/assets/photos/` and used across the site (38 assets, resized to ≤1600px). Hotlinking is banned; images are served locally. Press Herald photos keep their photographer credits in captions.
+6. **Local Hero Award video (about.html)** — original plays inside Wix; the still frame is shown, and the video copy still needs a hosted home.
 
 ## What cannot be static
 
@@ -62,7 +62,8 @@ The test suite builds the site into a temp dir and enforces the ledger constrain
 ```
 site/pages/*.html   page bodies (metadata in first-line comment)
 site/styles.css     the stylesheet
-site/assets/        PSP logo (org's own branding)
+site/assets/        PSP logo + psp-favicon.png (org's own branding)
+site/assets/photos/ photography + graphics copied from the live Wix site
 tools/build.py      assembler (stdlib)
 tests/test_site.py  constraint and integrity tests
 docs/               generated output, published by Pages

@@ -11,7 +11,7 @@ Static HTML/CSS site for Protect South Portland, generated into `docs/` by `tool
 
 1. No links to the tank-farms research surfaces anywhere public: `report.html`, `factcheck.html`, `data.html`, `github.com/cristoslc/south-portland-tank-farms`, or their nav labels ("Research report", "Fact-check log", "Data files", "GitHub repo"). The homepage iframe must keep pointing at `https://cristoslc.github.io/south-portland-tank-farms/embed.html` only.
 2. No mention of the October 15 community assembly (invitation-only; Facebook/poster channels only). Never add any event copy for it.
-3. Text copied verbatim from PSP-authored pages is fine. Do NOT copy photos or graphics from the live Wix site; use labeled placeholder blocks instead.
+3. Text copied verbatim from PSP-authored pages is fine. Photography and graphics from the live Wix site ARE copied locally into `site/assets/photos/` (operator directive, 2026-10-13) and served from this repo; never hotlink `static.wixstatic.com`. Keep press-photo credits (Portland Press Herald photographers) in captions.
 4. Change requests come from the ledger: `website-change-requests.md` in the PSP project workspace (this repo implements the open rows; row 4 and row 9 are constraints, not content).
 
 ## Editing flow

@@ -35,14 +35,17 @@ A plain HTML/CSS rebuild of the PSP website, mirroring the structure and content
 
 ## Placeholders needing operator decisions
 
-All appear as dashed orange `.todo` blocks on the live-looking pages:
+Tracked in the ledger, not on the pages (pages carry visitor-friendly wording):
 
-1. **Donate (donate.html)** — the Wix-hosted PayPal button has no static equivalent. Set up PSP's PayPal giving button or another hosted processor.
-2. **Newsletter (newsletter.html)** — subscribe form needs a form service (or mailto bridge already shown); archive PDFs still live on Wix and should be mirrored into this repo.
-3. **Contact (contact.html)** — Wix contact form replaced with the email address; embed a form when a hosted service exists.
+1. **Donate (donate.html)** — page says "Online giving is coming soon" with the P.O. box; the operator still needs PSP's PayPal (or another hosted) button.
+2. **Newsletter (newsletter.html)** — subscribe-by-email shown, form "coming soon"; both archive PDFs are now mirrored locally (2021-01-13, 2020-12-13); a current issue is wanted (the 2021 items are presented as an archive).
+3. **Contact (contact.html)** — email-first with "contact form is coming soon"; embed a form when a hosted service exists.
 4. **Final public map graphic (homepage)** — swap the placeholder box for the graphic Mindy and Nate finalize.
-5. ~~Photos/graphics~~ RESOLVED 2026-10-13 — the photography and graphics from the live Wix site are copied into `site/assets/photos/` and used across the site (38 assets, resized to ≤1600px). Hotlinking is banned; images are served locally. Press Herald photos keep their photographer credits in captions.
-6. **Local Hero Award video (about.html)** — original plays inside Wix; the still frame is shown, and the video copy still needs a hosted home.
+5. **DEP/CDC fence-line analysis** — the `Where things stand — October 2026` section on oil-tank-emissions.html has a one-line placeholder: link + summarize the analysis when it publishes (verified raw summaries from Sept 8 and Oct 6, 2026 are already linked).
+6. **Local Hero Award video (about.html)** — the still frame is shown; the video copy still needs a hosted home.
+7. **Grow Healthy South Portland page** — no verified .gov home exists yet; the pesticides.html mention is plain text (link only when verified).
+
+**Dated strip:** every page's footer carries `Next: City Council workshop - Tuesday, Oct 27 ...` marked `<!-- DATED: remove after 2026-10-27 workshop -->` in tools/build.py — delete the strip div in build.py and the `.dated-strip` block in site/styles.css after the workshop.
 
 ## What cannot be static
 
@@ -55,7 +58,7 @@ python3 tools/build.py            # assemble docs/ from site/pages
 python3 -m pytest tests/          # test suite (pip install pytest)
 ```
 
-The test suite builds the site into a temp dir and enforces the ledger constraints above (banner verbatim + placement, map ordering, hero replacement, private-link ban, Oct 15 ban, link integrity, external-domain allowlist).
+The test suite builds the site into a temp dir and enforces the ledger constraints above (banner verbatim + placement, map ordering, hero replacement, private-link ban, Oct 15 ban, homepage cut-down + past-work archive, dated footer strip, nav Act Now, Wix PDF mirroring, dead-domain ban, link integrity, external-domain allowlist).
 
 ## Repo structure
 

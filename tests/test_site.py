@@ -117,7 +117,8 @@ def test_expected_pages_built(docs):
         "index.html", "act-now.html", "about.html", "our-campaigns.html",
         "coastal-flooding.html", "yard-south-proposal.html", "oil-tank-emissions.html",
         "clear-skies.html", "fertilizer-ban.html", "pesticides.html", "vocs.html",
-        "newsletter.html", "get-involved.html", "donate.html", "contact.html", "404.html",
+        "newsletter.html", "get-involved.html", "donate.html", "contact.html",
+        "404.html", "past-work.html",
     ):
         assert expected in names, expected
     assert "styles.css" in os.listdir(docs)
@@ -278,3 +279,129 @@ def test_no_october_27_dates_lost(docs):
     idx = read(docs, "index.html")
     assert "Oct. 27" in idx
     assert "637 Highland Ave" in idx
+
+
+# ---- content-gap rewrite (Oct 13, 2026): homepage cut-down, archive page, ----
+# ---- dated footer strip, dead-link sweep                                      ----
+
+DATED_PHRASE = "Next: City Council workshop - Tuesday, Oct 27, 6:30 p.m., South Portland High School."
+DATED_COMMENT = "<!-- DATED: remove after 2026-10-27 workshop"
+
+PETITION_URL = (
+    "https://docs.google.com/forms/d/e/"
+    "1FAIpQLSfPIeWgfe7GGgNqhxVatcPAEffmqo5jJJ-iGYcCh4ltcQsZcA/viewform"
+)
+
+MIRRORED_PDFS = (
+    "hem3-report-summary.pdf",
+    "newsletter-2021-01-13.pdf",
+    "newsletter-2020-12-13.pdf",
+    "fertilizer-ordinance-2020.pdf",
+    "maine-dep-report-ld1915.pdf",
+    "psp-submission-enr.pdf",
+    "falatko-comments.pdf",
+    "mikulka-comments.pdf",
+    "pesticide-ordinance-ch32.pdf",
+    "pesticide-ordinance-faqs.pdf",
+    "clear-skies-ordinance-2014.pdf",
+)
+
+
+def test_homepage_cut_down(docs):
+    idx = read(docs, "index.html")
+    assert "Comprehensive Plan for South Portland is mandated" not in idx
+    assert "Yard South development" not in idx
+    assert PETITION_URL not in idx
+    # the pinned surface survives untouched
+    assert BANNER_TEXT in idx and 'id="tank-farms"' in idx
+
+
+def test_past_work_archives_and_nav_exclusion(docs):
+    pw = read(docs, "past-work.html")
+    assert pw.count("Historical campaign") >= 2
+    assert "Comprehensive Plan advocacy, 2024" in pw
+    assert "Yard South proposal, 2023&ndash;2024" in pw
+    assert 'href="yard-south-proposal.html"' in pw
+    assert "Comprehensive Plan for South Portland is mandated" in pw
+    for name in html_files(docs):
+        page = read(docs, name)
+        m = re.search(r'<nav class="main-nav".*?</nav>', page, re.S)
+        assert m, name
+        assert "past-work.html" not in m.group(0), f"{name}: past-work must stay out of the header nav"
+    # footer carries the archive link
+    assert 'href="past-work.html"' in read(docs, "contact.html")
+
+
+def test_act_now_in_header_nav(docs):
+    for name in html_files(docs):
+        m = re.search(r'<nav class="main-nav".*?</nav>', read(docs, name), re.S)
+        assert m and 'href="act-now.html"' in m.group(0), name
+
+
+def test_dated_footer_strip_every_page(docs):
+    for name in html_files(docs):
+        page = read(docs, name)
+        assert DATED_PHRASE in page, name
+        assert DATED_COMMENT in page, name
+        assert 'class="dated-strip"' in page, name
+        assert re.search(r'<a href="act-now\.html">Act now\.</a>', page), name
+
+
+def test_no_public_todo_strings(docs):
+    for name in html_files(docs):
+        assert "TODO" not in read(docs, name), name
+
+
+def test_get_involved_current_ask_and_relocation(docs):
+    gi = read(docs, "get-involved.html")
+    assert "Oct. 27" in gi and "637 Highland Ave" in gi
+    assert PETITION_URL in gi
+    assert "pressherald.com/contact/" in gi
+
+
+def test_about_tense_fixes(docs):
+    ab = read(docs, "about.html")
+    assert "fifth year" not in ab
+    assert "docket" not in ab
+    assert "12 coordinators" not in ab
+    assert "core group of coordinators" in ab
+    assert "13th year" in ab
+    assert "What we're doing now" in ab
+
+
+def test_where_things_stand_section(docs):
+    ot = read(docs, "oil-tank-emissions.html")
+    assert "Where things stand &mdash; October 2026" in ot
+    assert "southportland.gov/522/Air-Quality-Concerns-Monitoring" in ot
+    assert "DocumentCenter/View/5116" in ot
+    assert "DocumentCenter/View/4819" in ot
+    assert "spo-voc-monitor.html" in ot
+    assert "fence-line data" in ot
+
+
+def test_wix_pdfs_mirrored_locally(docs):
+    all_html = "\n".join(read(docs, n) for n in html_files(docs))
+    assert "protectsouthportland.com/_files" not in all_html
+    for pdf in MIRRORED_PDFS:
+        assert os.path.exists(os.path.join(docs, "assets", "files", pdf)), pdf
+
+
+def test_no_southportland_org_links(docs):
+    for name in html_files(docs):
+        page = read(docs, name)
+        for url in re.findall(r'href="(https?://[^"]*)"', page):
+            host = re.match(r"https?://([^/?#]*)", url).group(1).lower().removeprefix("www.")
+            assert host != "southportland.org", f"{name}: dead-domain link {url}"
+
+
+def test_local_pdfs_resolve(docs):
+    href_re = re.compile(r'href="(assets/files/[^"]+)"')
+    for name in html_files(docs):
+        for href in href_re.findall(read(docs, name)):
+            assert os.path.exists(os.path.join(docs, href)), f"{name}: missing {href}"
+
+
+def test_newsletter_archive_demoted(docs):
+    nl = read(docs, "newsletter.html")
+    assert "Newsletter archive" in nl
+    assert "Most recent newsletter" not in nl

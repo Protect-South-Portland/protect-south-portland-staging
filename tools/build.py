@@ -8,13 +8,16 @@ must be an HTML comment carrying the page metadata:
 
 build.py wraps each body in the shared shell — masthead, navigation, footer —
 writes the result to docs/, copies site/styles.css and site/assets/, and is
-deliberately boring: stdlib only, no dependencies. GitHub Actions runs it on
-push, then publishes docs/ with GitHub Pages.
+deliberately boring: stdlib only, no dependencies. CI runs the tests and the
+build; publishing is the mirror pipeline (tools/publish.py, see AGENTS.md
+"Publishing to the public mirror").
 """
 import os
 import re
 import shutil
 import sys
+
+import psp_public
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE = os.path.join(ROOT, "site")
@@ -42,17 +45,17 @@ NAV_BODY = """
     <nav class="main-nav" aria-label="Main">
       <ul>
         <li><a href="index.html">Home</a></li>
-        <li class="nav-cta"><a href="act-now.html">Act Now</a></li>
+        <li class="nav-cta"><a href="act-now.html">Act now</a></li>
         <li><a href="about.html">About</a></li>
         <li class="has-sub">
-          <a href="our-campaigns.html">Active Campaigns</a>
+          <a href="our-campaigns.html">Active campaigns</a>
           <ul class="submenu">
             <li><a href="tank-farms.html">South Portland Tank Farms</a></li>
             <li><a href="coastal-flooding.html">Coastal Flooding</a></li>
           </ul>
         </li>
         <li class="has-sub">
-          <a href="past-work.html">Past Work</a>
+          <a href="past-work.html">Past work</a>
           <ul class="submenu">
             <li><a href="past-work.html">Campaign archive</a></li>
             <li><a href="yard-south-proposal.html">Yard South Proposal</a></li>
@@ -62,7 +65,7 @@ NAV_BODY = """
           </ul>
         </li>
         <li><a href="newsletter.html">Newsletter</a></li>
-        <li><a href="get-involved.html">Get Involved</a></li>
+        <li><a href="get-involved.html">Get involved</a></li>
         <li><a href="donate.html">Donate</a></li>
         <li><a href="contact.html">Contact</a></li>
       </ul>
@@ -71,9 +74,12 @@ NAV_BODY = """
 </header>
 """
 
+# DATED: the "Next: City Council workshop" strip below comes out after the
+# Oct 27, 2026 workshop. To remove it: delete the dated-strip div here and the
+# .dated-strip block in site/styles.css. The marker lives in this Python
+# comment deliberately so the internal note never reaches the served HTML.
 FOOTER_BODY = """
 <div class="dated-strip" role="note">
-  <!-- DATED: remove after 2026-10-27 workshop — delete this div and the .dated-strip block in site/styles.css -->
   <p>Next: City Council workshop - Tuesday, Oct 27, 6:30 p.m., South Portland High School. <a href="act-now.html">Act now.</a></p>
 </div>
 <footer class="footer">
@@ -87,6 +93,7 @@ FOOTER_BODY = """
         <li><a href="about.html">About</a></li>
         <li><a href="our-campaigns.html">Active campaigns</a></li>
         <li><a href="tank-farms.html">Tank farms</a></li>
+        <li><a href="fertilizer-ban.html">Fertilizer Ban</a></li>
         <li><a href="coastal-flooding.html">Coastal flooding</a></li>
         <li><a href="past-work.html">Past work</a></li>
         <li><a href="yard-south-proposal.html">Yard South Proposal</a></li>
@@ -160,6 +167,9 @@ def build(out_dir: str) -> list:
         written.append(old)
     shutil.copy(os.path.join(SITE, "styles.css"), os.path.join(out_dir, "styles.css"))
     shutil.copytree(os.path.join(SITE, "assets"), os.path.join(out_dir, "assets"), dirs_exist_ok=True)
+    copied_map = psp_public.refresh_map_dir(out_dir)
+    if copied_map:
+        print("map:", ", ".join(copied_map))
     print("pages:", ", ".join(written))
     return written
 

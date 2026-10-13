@@ -58,7 +58,17 @@ python3 tools/build.py            # assemble docs/ from site/pages
 python3 -m pytest tests/          # test suite (pip install pytest)
 ```
 
-The test suite builds the site into a temp dir and enforces the ledger constraints above (banner verbatim + placement, map ordering, hero replacement, private-link ban, Oct 15 ban, homepage cut-down + past-work archive, dated footer strip, nav Act Now, Wix PDF mirroring, dead-domain ban, link integrity, external-domain allowlist).
+The test suite builds the site into a temp dir and enforces the ledger constraints above (banner verbatim + placement, map ordering, hero replacement, private-link ban, Oct 15 ban, homepage cut-down + past-work archive, dated footer strip, nav Act Now, Wix PDF mirroring, dead-domain ban, link integrity, external-domain allowlist) plus the release-gate rules in AGENTS.md (draft-artifact ban, self-hosted map).
+
+## Publish (public mirror)
+
+The public site lives in a separate mirror repo — `cristoslc/protect-south-portland-published` — that carries exactly the campaign pages, local assets, and the standalone map (`map/embed.html`, `map/map.html`). Publish is one command, gate report in hand:
+
+```sh
+python3 tools/publish.py --gate-report ../gate-reports/<date>.json
+```
+
+Details (staging, marker scans, single-commit force-push, DNS-flip step): AGENTS.md, "Publishing to the public mirror".
 
 ## Repo structure
 

@@ -29,32 +29,19 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD = os.path.join(ROOT, "tools", "build.py")
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+
+import psp_public
 
 BANNER_TEXT = "Tell our leaders to stop tank farms from dumping hazardous pollutants in our neighborhoods."
-EMBED_URL = "https://cristoslc.github.io/south-portland-tank-farms/embed.html"
+EMBED_URL = "map/embed.html"
 
 # Ledger row 1: private map-site surface must never leak onto the public site.
-PRIVATE_MARKERS = (
-    "factcheck",
-    "report.html",
-    "data.html",
-    "github.com/cristoslc",
-    "Research report",
-    "Fact-check log",
-    "Data files",
-    "GitHub repo",
-)
-
-# Ledger row 9 (constraint): the invitation-only assembly is never on the site.
-FORBIDDEN_EVENT_MARKERS = (
-    "October 15",
-    "October 15th",
-    "Oct. 15",
-    "Oct 15",
-    "Oct.15",
-    "the 15th",
-    "community assembly",
-)
+# The marker sets live in tools/psp_public.py — shared with build.py and
+# tools/publish.py so every entry point enforces the same rules.
+PRIVATE_MARKERS = psp_public.PRIVATE_MARKERS
+FORBIDDEN_EVENT_MARKERS = psp_public.EVENT_MARKERS
+FORBIDDEN_DRAFT_MARKERS = psp_public.DRAFT_MARKERS
 
 EXTERNAL_ALLOWLIST = (
     "southportland.gov",
@@ -92,7 +79,6 @@ EXTERNAL_ALLOWLIST = (
     "wmtw.com",
     "youtu.be",
     "youtube.com",
-    "cristoslc.github.io",
 )
 
 
@@ -147,8 +133,8 @@ def test_nav_structure_after_split(docs):
             continue
         m = re.search(r'<nav class="main-nav".*?</nav>', read(docs, name), re.S)
         nav = m.group(0)
-        assert "Active Campaigns" in nav, name
-        assert "Past Work" in nav, name
+        assert "Active campaigns" in nav, name
+        assert "Past work" in nav, name
         assert "Our Campaigns" not in nav, name
         assert "oil-tank-emissions.html" not in nav, name
         assert "vocs.html" not in nav, name
@@ -196,9 +182,14 @@ def test_row3_map_top_center_text_below(docs):
     assert iframe_pos < idx.index("Now is the time to act")
 
 
-def test_row7_placeholder_is_clearly_labeled(docs):
-    idx = read(docs, "index.html")
-    assert "Placeholder" in idx and "final public map graphic" in idx
+def test_row7_map_notice_is_public_wording(docs):
+    """Row 7 keeps a clearly marked graphic-swap notice, in public copy only:
+    no draft language (release-gate rule 4 bans Placeholder/pending labels)."""
+    for name in ("index.html", "tank-farms.html"):
+        page = read(docs, name)
+        assert "Final public map graphic: in design" in page, name
+        assert "Explore the interactive map below" in page, name
+        assert "Placeholder" not in page and "pending" not in page, name
 
 
 def test_row6_hero_replaced_and_act_now_landing(docs):
@@ -218,10 +209,48 @@ def test_row9_no_oct15_assembly_anywhere(docs):
         assert marker.lower() not in all_html, marker
 
 
+def test_no_draft_language_anywhere(docs):
+    """Release-gate rule 4: internal-draft language never reaches the surface."""
+    patterns = ("as now written", "most recent draft", "TODO", "FIXME", "[Placeholder")
+    for name in html_files(docs):
+        page = read(docs, name)
+        for p in patterns:
+            assert p not in page, f"{name}: draft language leaked: {p}"
+
+
 def test_row1_no_private_links_anywhere(docs):
     all_html = "\n".join(read(docs, n) for n in html_files(docs))
     for marker in PRIVATE_MARKERS:
         assert marker not in all_html, marker
+
+
+def test_no_draft_artifacts_anywhere(docs):
+    """Release gate rule 4 (AGENTS.md, 2026-10-13): internal working-draft
+    language never reaches the public surface. Known live artifact:
+    `THE #1 GOAL AS NOW WRITTEN IN THE MOST RECENT DRAFT:` (past-work.html)."""
+    violations = []
+    for name in html_files(docs):
+        violations.extend(psp_public.scan_text(read(docs, name), name, FORBIDDEN_DRAFT_MARKERS))
+    assert not violations, "\n" + "\n".join(violations)
+
+
+@pytest.mark.skipif(
+    psp_public.find_map_source_docs() is None,
+    reason="standalone map pages not available (no tank-farms checkout)")
+def test_map_pages_published_chrome_free(docs):
+    """The site build ships the standalone map pages under map/ (published by
+    tools/publish.py as the mirror's map subtree, and committed so CI can
+    serve the relative iframe). Research chrome must be gone from map.html;
+    every map file must be marker-clean."""
+    map_dir = os.path.join(docs, "map")
+    for name in psp_public.MAP_FILES:
+        assert os.path.exists(os.path.join(map_dir, name)), name
+    map_html = read(map_dir, "map.html")
+    assert "<nav>" not in map_html
+    violations = []
+    for name in psp_public.MAP_FILES:
+        violations.extend(psp_public.scan_file(os.path.join(map_dir, name), f"map/{name}"))
+    assert not violations, "\n" + "\n".join(violations)
 
 
 def test_no_wix_assets_copied(docs):
@@ -319,14 +348,13 @@ def test_external_links_allowlisted(docs):
             )
 
 def test_embed_url_is_the_public_embedding(docs):
-    idx = read(docs, "index.html")
-    assert EMBED_URL in idx
-    # the embed page must be the nav-free variant, not the research-chrome map
-    for name in html_files(docs):
-        assert "south-portland-tank-farms/map.html" not in read(docs, name)
+    """The map is self-hosted: both mapping pages iframe map/embed.html from
+    this same published tree — no absolute cristoslc.github.io source."""
+    for name in ("index.html", "tank-farms.html"):
+        assert 'src="map/embed.html"' in read(docs, name), name
 
 
-def test_no_october_27_dates_lost(docs):
+def test_row9_no_oct15_assembly_anywhere(docs):
     """The action dates from the docx must appear (sanity for row 5/6 copy)."""
     idx = read(docs, "index.html")
     assert "Oct. 27" in idx
@@ -337,7 +365,9 @@ def test_no_october_27_dates_lost(docs):
 # ---- dated footer strip, dead-link sweep                                      ----
 
 DATED_PHRASE = "Next: City Council workshop - Tuesday, Oct 27, 6:30 p.m., South Portland High School."
-DATED_COMMENT = "<!-- DATED: remove after 2026-10-27 workshop"
+# the internal DATED marker lives only in tools/build.py as a Python comment;
+# the served HTML must never carry it (release-gate rule 4, reviewer R1)
+DATED_COMMENT = "DATED: remove after 2026-10-27 workshop"
 
 PETITION_URL = (
     "https://docs.google.com/forms/d/e/"
@@ -397,7 +427,7 @@ def test_dated_footer_strip_every_page(docs):
             continue
         page = read(docs, name)
         assert DATED_PHRASE in page, name
-        assert DATED_COMMENT in page, name
+        assert DATED_COMMENT not in page, f"{name}: internal DATED comment leaked into served HTML"
         assert 'class="dated-strip"' in page, name
         assert re.search(r'<a href="act-now\.html">Act now\.</a>', page), name
 
@@ -460,3 +490,56 @@ def test_newsletter_archive_demoted(docs):
     nl = read(docs, "newsletter.html")
     assert "Newsletter archive" in nl
     assert "Most recent newsletter" not in nl
+
+
+# ---- publication-safety helpers (tools/psp_public.py): the mirror tree's ----
+# ---- scan rules are unit-pinned here so build/publish/enforcement stay   ----
+# ---- in one place.                                                       ----
+
+def test_strip_research_chrome_removes_nav_and_sidebar_links():
+    sample = (
+        '<header class="site"><div class="wrap"><h1>Protect South Portland</h1><nav>'
+        '<a href="index.html">Home</a><a href="report.html">Research Report</a>'
+        '<a href="https://github.com/cristoslc/south-portland-tank-farms">GitHub'
+        "</a></nav></div></header>\n"
+        "<p>Closest pairings stand.</p>\n"
+        '<p style="margin-top:8px">\n'
+        '  <a class="side-link" href="report.html">Research report</a> &middot;\n'
+        '  <a class="side-link" href="data.html">Data files</a>\n'
+        "</p>\n"
+    )
+    stripped = psp_public.strip_research_chrome(sample)
+    assert "<nav>" not in stripped
+    assert 'href="report.html"' not in stripped
+    assert "Research report" not in stripped
+    assert "Protect South Portland" in stripped  # brand header stays
+    assert "Closest pairings stand." in stripped  # non-link copy stays
+
+
+def test_public_scan_catches_private_strings(tmp_path):
+    page = tmp_path / "page.html"
+    page.write_text(
+        '<a href="https://github.com/cristoslc/south-portland-tank-farms">GitHub</a>',
+        encoding="utf-8",
+    )
+    violations = psp_public.scan_tree(tmp_path)
+    assert any("south-portland-tank-farms" in v for v in violations), violations
+
+
+def test_public_scan_catches_draft_and_path_rails(tmp_path):
+    (tmp_path / "past-work.html").write_text(
+        "<p>THE #1 GOAL AS NOW WRITTEN IN THE MOST RECENT DRAFT:</p>", encoding="utf-8")
+    (tmp_path / "gap-analysis.html").write_text("<p>internal</p>", encoding="utf-8")
+    (tmp_path / "meeting-notes.md").write_text("internal", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# Public snapshot", encoding="utf-8")
+    violations = psp_public.scan_tree(tmp_path)
+    assert any("most recent draft" in v for v in violations), violations
+    assert any("gap-analysis.html" in v for v in violations), violations
+    assert any("meeting-notes.md" in v for v in violations), violations
+    assert not any(v.startswith("README.md") for v in violations), violations
+
+
+def test_public_scan_skips_binary_formats(tmp_path):
+    bogus = tmp_path / "looks-private.pdf"
+    bogus.write_bytes(b"%PDF-1.4 fake payload south-portland-tank-farms")
+    assert psp_public.scan_tree(tmp_path) == []

@@ -461,9 +461,9 @@ blockquote {
   text-align: center;
 }
 
-/* ---------- TODO placeholder blocks (operator decisions) ---------- */
+/* ---------- placeholder blocks (operator decisions) ---------- */
 
-.todo {
+.placeholder-block {
   border: 2px dashed var(--orange);
   background: #fdf1ec;
   border-radius: 12px;
@@ -473,7 +473,7 @@ blockquote {
   margin: 1.2em 0;
 }
 
-.todo strong { color: var(--orange-dark); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; display: block; margin-bottom: 4px; }
+.placeholder-block strong { color: var(--orange-dark); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.8rem; display: block; margin-bottom: 4px; }
 
 .page-head { padding: 40px 0 10px; }
 

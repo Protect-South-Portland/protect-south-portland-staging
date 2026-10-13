@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""Publication-safety rules shared by build.py, publish.py and the tests.
+
+The public mirror carries ONLY the campaign site plus the standalone
+tank-farm map. Everything that belongs to the private research surface —
+files, links, labels, the private repo's name and its github.io host — and
+every internal working-draft artifact is banned from any published tree.
+The rules live here once, and every entry point (site build, mirror
+publish, CI) enforces the same sets, failing loudly instead of quietly
+sanitizing.
+"""
+import os
+import re
+import shutil
+
+# Links, labels and names belonging to the private research surface. The
+# private repo's NAME and its github.io host are banned too: once that repo
+# goes private, any public reference to it is at best a dead link and at
+# worst a disclosure.
+PRIVATE_MARKERS = (
+    "factcheck",
+    "report.html",
+    "data.html",
+    "github.com/cristoslc",
+    "south-portland-tank-farms",
+    "cristoslc.github.io",
+    "wixstatic",
+    "PULL-PROVENANCE",
+    "Research report",
+    "Fact-check log",
+    "Data files",
+    "GitHub repo",
+)
+
+# Ledger row 9 (constraint): the Oct 15 assembly is never on the public site.
+EVENT_MARKERS = (
+    "October 15",
+    "October 15th",
+    "Oct. 15",
+    "Oct 15",
+    "Oct.15",
+    "the 15th",
+    "community assembly",
+)
+
+# AGENTS.md release gate, rule 4: scan for the draft-artifact pattern class,
+# not a single exact string ("as now written", "most recent draft", TODO/FIXME
+# labels, anything that reads like a note to self).
+DRAFT_MARKERS = (
+    "as now written",
+    "most recent draft",
+    "working draft",
+    "TODO",
+    "FIXME",
+)
+
+ALL_MARKERS = PRIVATE_MARKERS + EVENT_MARKERS + DRAFT_MARKERS
+
+# Nothing whose path smells like internal material is ever copied into a
+# published tree, whatever it claims to contain. Casefolded substring match
+# against every path component.
+FORBIDDEN_PATH_PATTERNS = (
+    "transcripts",
+    "website-change-requests",
+    "gap-analysis",
+    "pull-provenance",
+    "ledger",
+    "chat-export",
+)
+
+BINARY_EXTENSIONS = {
+    ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".avif",
+    ".woff", ".woff2", ".ttf", ".eot", ".otf", ".zip", ".mp3", ".mp4",
+}
+
+MAP_DIRNAME = "map"
+MAP_FILES = ("embed.html", "map.html", "styles.css")
+
+SITE_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# The standalone map pages are generated in the private tank-farms repo
+# (docs/). By default the sibling checkout supplies them; PSP_MAP_DOCS_DIR
+# overrides the location explicitly.
+SIBLING_MAP_DOCS = os.path.join(
+    os.path.dirname(SITE_REPO_ROOT), "south-portland-tank-farms", "docs")
+
+# Research chrome on the standalone map page (tank-farms repo docs/map.html):
+# the header nav links the research pages + private repo, and the sidebar
+# carries the same four links. Both are cut; the brand header and the map
+# sidebar prose stay. The post-strip marker scan is the hard gate.
+HEADER_NAV_RE = re.compile(r"<nav>.*?</nav>", re.DOTALL)
+SIDEBAR_LINKS_RE = re.compile(
+    r'<p style="margin-top:8px">\s*<a class="side-link".*?</p>', re.DOTALL)
+
+# Only the root README.md is published; any other .md in the tree is a leak.
+PUBLISHED_MD_ALLOWLIST = ("README.md",)
+
+
+def strip_research_chrome(html):
+    """Remove tank-farms research chrome from the standalone map page.
+
+    Cutting only, never rewriting content. Callers must run the marker scan
+    on the result — the scan, not the regexes, is the hard gate.
+    """
+    html = HEADER_NAV_RE.sub("", html, count=1)
+    html = SIDEBAR_LINKS_RE.sub("", html, count=1)
+    return html
+
+
+def find_map_source_docs():
+    """Directory holding the standalone map pages, or None if unavailable."""
+    env_path = os.environ.get("PSP_MAP_DOCS_DIR")
+    if env_path:
+        if not os.path.isdir(env_path):
+            raise SystemExit(f"PSP_MAP_DOCS_DIR={env_path!r}: not a directory")
+        return env_path
+    return SIBLING_MAP_DOCS if os.path.isdir(SIBLING_MAP_DOCS) else None
+
+
+def scan_text(text, label, markers=ALL_MARKERS):
+    """Violations for one text blob (case-insensitive); empty list = clean."""
+    lines = text.splitlines()
+    folded = text.casefold()
+    violations = []
+    for marker in markers:
+        needle = marker.casefold()
+        if needle not in folded:
+            continue
+        hit = next(
+            ((i, line.strip()) for i, line in enumerate(lines, 1)
+             if needle in line.casefold()),
+            None,
+        )
+        if hit:
+            line_no, snippet = hit
+            if len(snippet) > 120:
+                at = snippet.casefold().find(needle)
+                snippet = "…" + snippet[max(0, at - 40):at + 70] + "…"
+            violations.append(f'{label}: marker "{marker}" line {line_no}: {snippet}')
+        else:
+            violations.append(f'{label}: marker "{marker}" (spans lines)')
+    return violations
+
+
+def scan_file(path, label, markers=ALL_MARKERS):
+    """Violations for one file; binary formats are skipped, not suppressed."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in BINARY_EXTENSIONS:
+        return []
+    text = open(path, encoding="utf-8", errors="replace").read()
+    return scan_text(text, label, markers=markers)
+
+
+def scan_tree(tree_dir, markers=ALL_MARKERS):
+    """Violations for a whole tree: marker strings, forbidden paths, .md rule.
+
+    Every file is scanned as text unless it is a known-binary format, so an
+    unknown file type containing private content still fails loudly.
+    """
+    violations = []
+    for dirpath, dirnames, filenames in os.walk(tree_dir):
+        dirnames.sort()
+        if ".git" in dirnames:
+            dirnames.remove(".git")
+        for fname in sorted(filenames):
+            rel = os.path.relpath(
+                os.path.join(dirpath, fname), tree_dir).replace(os.sep, "/")
+            for part in rel.split("/"):
+                folded = part.casefold()
+                for pattern in FORBIDDEN_PATH_PATTERNS:
+                    if pattern in folded:
+                        violations.append(
+                            f'{rel}: forbidden path component "{pattern}"')
+            if rel.lower().endswith(".md"):
+                if rel not in PUBLISHED_MD_ALLOWLIST:
+                    violations.append(
+                        f"{rel}: .md files are not published "
+                        f"(allowed: {', '.join(PUBLISHED_MD_ALLOWLIST)})")
+            violations.extend(scan_file(os.path.join(tree_dir, *rel.split("/")), rel, markers=markers))
+    return violations
+
+
+def assert_clean(violations, what):
+    if violations:
+        report = "\n".join(f"  - {v}" for v in violations)
+        raise SystemExit(
+            f"{what}: {len(violations)} publication-safety violation(s)\n"
+            f"{report}\n"
+            "Fix the source (or the copy step) and re-run. Nothing is "
+            "published while violations remain.")
+
+
+def copy_map_pages(out_dir, src_docs):
+    """Copy embed.html/styles.css verbatim and a stripped map.html into
+    out_dir/map/. Fails loud if anything private survives anywhere."""
+    map_out = os.path.join(out_dir, MAP_DIRNAME)
+    os.makedirs(map_out, exist_ok=True)
+    written = []
+    for name in ("embed.html", "styles.css"):
+        shutil.copy2(os.path.join(src_docs, name), os.path.join(map_out, name))
+        written.append(f"map/{name}")
+    stripped = strip_research_chrome(
+        open(os.path.join(src_docs, "map.html"), encoding="utf-8").read())
+    open(os.path.join(map_out, "map.html"), "w", encoding="utf-8").write(stripped)
+    written.append("map/map.html")
+    assert_clean([violation for name in MAP_FILES
+                  for violation in scan_file(os.path.join(map_out, name), f"map/{name}")],
+                 "copied map pages")
+    return written
+
+
+def refresh_map_dir(out_dir):
+    """Map pages into out_dir/map/ from the freshest available source.
+
+    - Source checkout present (or PSP_MAP_DOCS_DIR set): copy + strip + scan.
+    - No source, existing map dir (e.g. the committed copy a CI checkout
+      rebuilds on): leave files untouched but scan them.
+    - Neither: no-op; tools/publish.py fails loudly when publishing without
+      a map, while plain site builds simply don't get one.
+    Returns the copied list, or None when absent.
+    """
+    src = find_map_source_docs()
+    map_out = os.path.join(out_dir, MAP_DIRNAME)
+    if src:
+        return copy_map_pages(out_dir, src)
+    if os.path.isdir(map_out):
+        assert_clean([violation for name in MAP_FILES
+                      for violation in scan_file(os.path.join(map_out, name), f"map/{name}")],
+                     "pre-existing map dir (no fresh source; scanned as-is)")
+        return None
+    return None

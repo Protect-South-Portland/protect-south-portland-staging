@@ -1,0 +1,3 @@
+# Purpose
+
+Give Protect South Portland a website it owns outright: a fast, plain HTML/CSS mirror of the Wix site with the group's current campaign — the South Portland tank farms and the fence-line air data — front and center, with the operator's open change requests already implemented, hosted for free on GitHub Pages, and ready to take the protectsouthportland.org domain whenever DNS is flipped. Research artifacts (reports, fact-check logs, raw data) stay on the separate tank-farms research site and out of the public nav.

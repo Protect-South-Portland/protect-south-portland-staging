@@ -1,0 +1,1 @@
+pytest>=8  # only the test suite needs this; tools/build.py is stdlib-only

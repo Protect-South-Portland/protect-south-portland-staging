@@ -201,6 +201,9 @@ def sync_tree(staging, mirror_dir):
     for dirpath, dirnames, filenames in os.walk(mirror_dir, topdown=False):
         if ".git" in dirnames:
             dirnames.remove(".git")
+        rel = os.path.relpath(dirpath, mirror_dir)
+        if rel == ".git" or rel.startswith(".git" + os.sep):
+            continue  # empty-object/refs subdirs of a fresh clone are repo internals
         if dirpath != mirror_dir and not os.listdir(dirpath):
             os.rmdir(dirpath)
     return removed

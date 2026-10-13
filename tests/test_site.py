@@ -160,6 +160,19 @@ def test_nav_structure_after_split(docs):
     assert "assets/files/hem3-report-summary.pdf" in tf
 
 
+def test_map_not_the_lead_on_tank_farms_page(docs):
+    """Operator directive 2026-10-13: on the dedicated campaign page the map is
+    never the lead element — where-things-stand text and the tank narrative
+    come first."""
+    tf = read(docs, "tank-farms.html")
+    iframe = tf.index(EMBED_URL)
+    assert tf.index("id=\"where-things-stand\"") < iframe
+    assert tf.index("120 large petroleum tanks") < iframe
+    # the homepage keeps the ledger-pinned layout: map top-center, text below
+    idx = read(docs, "index.html")
+    assert idx.index(EMBED_URL) < idx.index("120 large petroleum tanks in South Portland")
+
+
 def test_row5_banner_verbatim_on_homepage(docs):
     idx = read(docs, "index.html")
     assert BANNER_TEXT in idx

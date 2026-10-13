@@ -364,7 +364,7 @@ def test_row9_no_oct15_assembly_anywhere(docs):
 # ---- content-gap rewrite (Oct 13, 2026): homepage cut-down, archive page, ----
 # ---- dated footer strip, dead-link sweep                                      ----
 
-DATED_PHRASE = "Next: City Council workshop - Tuesday, Oct 27, 6:30 p.m., South Portland High School."
+DATED_PHRASE = "Next: City Council workshop - Tuesday, Oct. 27, 6:30 p.m., South Portland High School."
 # the internal DATED marker lives only in tools/build.py as a Python comment;
 # the served HTML must never carry it (release-gate rule 4, reviewer R1)
 DATED_COMMENT = "DATED: remove after 2026-10-27 workshop"

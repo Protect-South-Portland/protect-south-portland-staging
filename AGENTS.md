@@ -16,4 +16,4 @@ Static HTML/CSS site for Protect South Portland, generated into `docs/` by `tool
 
 ## Editing flow
 
-Edit `site/pages/*.html` (each file carries its title/description in the first-line `<!-- meta: ... -->` comment), run `python3 tools/build.py`, run the tests, commit, push. CI rebuilds and deploys.
+Edit `site/pages/*.html` (each file carries its title/description in the first-line `<!-- meta: ... -->` comment), run `python3 tools/build.py`, run the tests, commit, push. CI rebuilds and deploys. After any layout/nav change, run the multi-viewport pass (`tools/visual_check.sh`) before reporting — 412/768/1440 screenshots of homepage + campaign page (top band + footer region); note the tall-iframe harness may miss late `loading="lazy"` images (capture-timing artifact, not a site bug). Old merged pages (`oil-tank-emissions.html`, `vocs.html`) live on as redirect stubs written by `tools/build.py` REDIRECTS.

@@ -5,7 +5,9 @@ One command builds the site into docs/, stages the exact publish tree
 (campaign pages + local assets + the standalone map under map/), scans it
 for everything private or draft-flavored, force-pushes ONE fresh commit
 (no inherited history) to the mirror repo, and makes sure Pages serves the
-mirror's main branch root.
+mirror's main branch root. Tests run via the pytest binary on PATH when it
+exists (uv-managed installs often lack it in the executing interpreter),
+falling back to python3 -m pytest.
 
 The mirror is the public face, so publication requires the reviewer's
 per-page gate report (AGENTS.md "Public website release gate"):
@@ -117,7 +119,9 @@ def require_clean_worktree():
 
 
 def build_site():
-    run([sys.executable, "-m", "pytest", "-q", "tests"])
+    pytest_bin = shutil.which("pytest")
+    run([pytest_bin, "-q", "tests"] if pytest_bin
+        else [sys.executable, "-m", "pytest", "-q", "tests"])
     run([sys.executable, "tools/build.py", "docs"])
     map_out = os.path.join(ROOT, "docs", psp_public.MAP_DIRNAME)
     missing = [name for name in psp_public.MAP_FILES

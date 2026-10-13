@@ -461,8 +461,6 @@ blockquote {
   text-align: center;
 }
 
-.dated-strip a { font-weight: 800; }
-
 /* ---------- TODO placeholder blocks (operator decisions) ---------- */
 
 .todo {

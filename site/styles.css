@@ -39,8 +39,8 @@ img { max-width: 100%; height: auto; }
 /* ---------- masthead + navigation ---------- */
 
 .masthead {
-  background: var(--paper);
-  border-bottom: 4px solid var(--teal-900);
+  background: var(--teal-900);
+  border-bottom: 4px solid var(--orange);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -61,7 +61,7 @@ img { max-width: 100%; height: auto; }
 .logo-link img { width: 96px; display: block; }
 
 .logo-link .wordmark {
-  color: var(--teal-900);
+  color: #fff;
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1.2;
@@ -74,10 +74,10 @@ img { max-width: 100%; height: auto; }
   display: none;
   cursor: pointer;
   padding: 6px 10px;
-  border: 2px solid var(--teal-900);
+  border: 2px solid #fff;
   border-radius: 8px;
   font-weight: 800;
-  color: var(--teal-900);
+  color: #fff;
   user-select: none;
 }
 
@@ -87,7 +87,7 @@ img { max-width: 100%; height: auto; }
 
 .main-nav a {
   display: block;
-  color: var(--ink);
+  color: #e6f1f1;
   text-decoration: none;
   font-weight: 600;
   font-size: 0.95rem;
@@ -95,7 +95,7 @@ img { max-width: 100%; height: auto; }
   border-radius: 8px;
 }
 
-.main-nav a:hover { background: var(--teal-100); color: var(--teal-900); }
+.main-nav a:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
 
 .main-nav .has-sub > a::after { content: " ▾"; font-size: 0.75rem; color: var(--teal-600); }
 

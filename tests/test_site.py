@@ -18,6 +18,7 @@ Builds site/pages into a temp dir via tools/build.py and pins the hard rules:
   static.wixstatic.com is banned by test_no_wix_assets_copied.
 """
 
+import html
 import os
 import re
 import shutil
@@ -66,6 +67,7 @@ EXTERNAL_ALLOWLIST = (
     "scientificamerican.com",
     "beyondpesticides.org",
     "plantcatalyst.com",
+    "paypal.com",
     "facebook.com",
     "twitter.com",
     "x.com",
@@ -347,6 +349,25 @@ def test_external_links_allowlisted(docs):
             assert any(host == a or host.endswith("." + a) for a in EXTERNAL_ALLOWLIST), (
                 f"{name}: external link not allowlisted: {url}"
             )
+
+def test_donate_page_has_one_paypal_path(docs):
+    """Ledger row 25 (live-site parity): donate.html restores the live site's
+    PayPal giving path — exactly one PayPal donate link, aimed at PSP's own
+    account, opening safely in a new tab. The UAT suite's
+    donate-page-has-mechanism expectation now meets its external_link branch;
+    the suite file itself was not edited."""
+    page = read(docs, "donate.html")
+    tags = re.findall(r"<a\s[^>]*paypal\.com[^>]*>", page)
+    assert len(tags) == 1, (
+        f"donate.html: expected exactly one PayPal link, got {len(tags)}")
+    tag = tags[0]
+    assert 'target="_blank"' in tag, tag
+    assert 'rel="noopener"' in tag, tag
+    href = html.unescape(re.search(r'href="([^"]*)"', tag).group(1))
+    assert href.startswith("https://www.paypal.com/donate"), href
+    assert "business=protectsouthportland%40gmail.com" in href, href
+    assert "currency_code=USD" in href, href
+
 
 def test_embed_url_is_the_public_embedding(docs):
     """The map is self-hosted: both mapping pages iframe map/embed.html from

@@ -77,6 +77,7 @@ EXTERNAL_ALLOWLIST = (
     "portlandphoenix.me",
     "centralmaine.com",
     "wmtw.com",
+    "web.archive.org",
     "youtu.be",
     "youtube.com",
 )

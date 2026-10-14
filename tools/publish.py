@@ -274,6 +274,12 @@ def main():
         description="Publish the public mirror (gate report mandatory).")
     parser.add_argument("--gate-report", required=True,
                         help="JSON file with the reviewer's per-page outcomes")
+    parser.add_argument("--subject", default=None,
+                        help="commit subject override (default: 'Publish <today>'; "
+                             "a same-day republish keeps the original subject)")
+    parser.add_argument("--note", default="",
+                        help="extra commit-message body line recording what "
+                             "this publish cycle changed")
     parser.add_argument("--mirror-dir", default=MIRROR_DIR,
                         help="mirror checkout (default: the published repo "
                              "clone; any other path = local verification only)")
@@ -298,11 +304,13 @@ def main():
     today = datetime.date.today().isoformat()
     site_sha, map_sha = source_provenance()
     snapshot = f"site {site_sha}" + (f", tank-farms map {map_sha}" if map_sha else "")
+    subject = args.subject or f"Publish {today}"
     message = (
-        f"Publish {today}\n\n"
+        f"{subject}\n\n"
         f"Release gate (AGENTS.md): all pages passed the humanizer + style "
         f"review on model {review_model}. Rounds to pass: {per_page}.\n"
-        f"Snapshot: {snapshot}.")
+        f"Snapshot: {snapshot}."
+        + (f"\n{args.note}" if args.note else ""))
 
     if is_remote_target:
         sha = single_commit(args.mirror_dir, message)

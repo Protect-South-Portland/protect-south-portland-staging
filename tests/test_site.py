@@ -50,7 +50,7 @@ EXTERNAL_ALLOWLIST = (
     "protectsouthportland.com",
     "docs.google.com",
     "drive.google.com",
-    "go.boarddocs.com",
+    "diligentoneplatform.com",
     "smellmycity.org",
     "southportland2040.com",
     "oneclimatefuture.org",

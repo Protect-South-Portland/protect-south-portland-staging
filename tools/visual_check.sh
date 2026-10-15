@@ -172,6 +172,106 @@ PYEOF
   done
 done
 
+# ---------- geometric overlap audit: every band composes clean -----------
+# Baked 2026-10-15 (round-3 sweep): per width, per page — the brand lockup
+# must not be overlapped by any chrome element, its seal must not override
+# the wordmark (the 901-band defect mode), no masthead/footer list pair may
+# collide, and nothing may overflow the viewport horizontally. Widths: the
+# full 700-1440 ladder in 40px steps plus 20px steps across the 1101-1260
+# region where the desktop row's fit threshold lives. Any offender aborts
+# the pass; screenshots alone can never prove the bands.
+echo "geometric audit: begin"
+AUDIT_JS="$(cat <<EOFJS
+const p = await browser.getPage('main');
+const pages = ['index.html', 'tank-farms.html'];
+const widths = [700, 740, 780, 820, 860, 900, 940, 980, 1020, 1060, 1100,
+  1101, 1121, 1141, 1161, 1181, 1201, 1221, 1241, 1260, 1300, 1340, 1380, 1420, 1440];
+const EPS = 0.5;
+const out = {};
+for (const W of widths) {
+  await p.setViewport({width: W, height: 900});
+  for (const page of pages) {
+    await p.goto('${BASE}' + page + '?g=' + Date.now(), {waitUntil: 'load'});
+    out[page + '@' + W] = await p.evaluate((EPS) => {
+      const intersect = (a, b) => !(
+        a.right <= b.left + EPS || a.left >= b.right - EPS ||
+        a.bottom <= b.top + EPS || a.top >= b.bottom - EPS);
+      const brand = document.querySelector('.logo-link');
+      const img = brand && brand.querySelector('img');
+      const wordmark = brand && brand.querySelector('.wordmark');
+      const brandInternal = !!(img && wordmark &&
+        intersect(img.getBoundingClientRect(), wordmark.getBoundingClientRect()));
+      const brect = brand ? brand.getBoundingClientRect() : null;
+      const brandOverlap = [];
+      if (brect) {
+        for (const c of document.querySelectorAll('.masthead > *, .footer, .dated-strip')) {
+          for (const el of c.querySelectorAll('*')) {
+            if (brand.contains(el) || el.closest('.logo-link')) continue;
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 && r.height === 0) continue;
+            if (el.classList.contains('nav-toggle')) continue;
+            if (intersect(r, brect)) brandOverlap.push(el.tagName);
+          }
+        }
+      }
+      const pairCollisions = [];
+      for (const listSel of ['.main-nav > ul', '.footer__links ul']) {
+        const lis = [...document.querySelectorAll(listSel + ' > li')];
+        for (let i = 0; i < lis.length; i++) {
+          for (let j = i + 1; j < lis.length; j++) {
+            const a = lis[i].getBoundingClientRect();
+            const b2 = lis[j].getBoundingClientRect();
+            if ((a.width === 0 && a.height === 0) || (b2.width === 0 && b2.height === 0)) continue;
+            if (intersect(a, b2)) pairCollisions.push(listSel + ' ' + i + 'x' + j);
+          }
+        }
+      }
+      return {
+        brandInternal,
+        nOver: brandOverlap.length,
+        nPairs: pairCollisions.length,
+        docOv: document.documentElement.scrollWidth > document.documentElement.clientWidth + EPS,
+        bodyOv: document.body.scrollWidth > document.body.clientWidth + EPS,
+      };
+    }, EPS);
+  }
+}
+const failures = Object.entries(out).filter(([, v]) =>
+  v.brandInternal || v.nOver > 0 || v.nPairs > 0 || v.docOv || v.bodyOv);
+return {total: Object.keys(out).length, failures};
+EOFJS
+)"
+AUDIT_OUT="$OUT/audit.json"
+if ! bb browser-automation run "$S" --script "$AUDIT_JS" --timeout-ms 110000 --json > "$AUDIT_OUT" 2>&1; then
+  echo "visual check: geometric audit run failed; aborting." >&2
+  exit 1
+fi
+AUDIT_STATUS=0
+uv run python3 - "$AUDIT_OUT" <<'AUDITPY' || AUDIT_STATUS=1
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception as e:
+    print(f"visual check: geometric audit output unreadable: {e}", file=sys.stderr)
+    sys.exit(1)
+if d.get("ok") is False or d.get("exitCode") != 0:
+    print("visual check: geometric audit script error:", (d.get("text") or d.get("error", {}).get("message", "unknown"))[:300], file=sys.stderr)
+    sys.exit(1)
+try:
+    payload = json.loads(d["text"])
+except Exception as e:
+    print(f"visual check: geometric audit payload unreadable: {e}", file=sys.stderr)
+    sys.exit(1)
+fails = payload.get("failures", [])
+if fails:
+    print(f"visual check: geometric audit FAILED — {len(fails)} bad width/page composites:", file=sys.stderr)
+    for k, v in fails[:12]:
+        print(f"  {k}: brandOverlap={v['nOver']} pairs={v['nPairs']} brandInternal={v['brandInternal']} overflow={v['docOv'] or v['bodyOv']}", file=sys.stderr)
+    sys.exit(1)
+print(f"geometric audit: OK — {payload['total']} width/page checks clean across 700-1440")
+AUDITPY
+if [ "$AUDIT_STATUS" -ne 0 ]; then exit 1; fi
+
 uv run --with pillow python3 - "$OUT" "$MIN_COLORS" <<'PYEOF'
 import glob, hashlib, os, sys
 from PIL import Image

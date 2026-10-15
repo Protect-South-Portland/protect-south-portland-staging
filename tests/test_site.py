@@ -327,14 +327,17 @@ def test_cname_ready_for_domain_flip(docs):
 
 
 def test_every_page_shell_complete(docs):
-    # mid-band masthead boundary (2026-10-15 overlap fix): the phone MENU
-    # pattern owns viewports <=1100px and the desktop inline row lives above
-    # it — measured, the brand lockup only reaches its full composition at
-    # 1100+ (the desktop row's flex squeeze starved it below that). The
-    # served stylesheet carries that boundary and no stale 900px query.
+    # mid-band masthead boundary (round-3 sweep, fixed): the phone MENU
+    # pattern owns viewports <=1200px — the desktop row's natural width
+    # measures 1204px, so no narrower band can compose it without overlap,
+    # and 1200 leaves ~100px margin over the 1060px content fit line (the
+    # classic-scrollbar class re-opens 1101-1115). The served stylesheet
+    # carries that boundary, no stale query, and the desktop lockup stays
+    # pinned to its shipped 162px composition above it.
     css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
-    assert "@media (max-width: 1100px)" in css, "masthead MENU boundary"
-    assert "@media (max-width: 900px)" not in css, "stale 900px boundary"
+    assert "@media (max-width: 1200px)" in css, "masthead MENU boundary"
+    assert "@media (min-width: 1201px)" in css and "width: 162px" in css, "desktop lockup pin"
+    assert "@media (max-width: 1100px)" not in css and "@media (max-width: 900px)" not in css, "stale boundary"
     for name in html_files(docs):
         if name in REDIRECT_PAGES:
             continue

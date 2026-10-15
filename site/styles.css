@@ -135,14 +135,9 @@ img { max-width: 100%; height: auto; }
 
 .main-nav .submenu a:hover { background: var(--teal-100); color: var(--teal-900); }
 
-/* Masthead boundary (2026-10-15 mid-band fix, measured): the desktop inline
-   nav row composes its designed content only at viewports above 1100px
-   (the row's flex squeeze starves the brand lockup below that, which
-   stranded "Home" under it in the 901-1099 band). Everything at or below
-   1100 gets the clean MENU pattern; above it the row fits with margin for
-   the first time and renders exactly as before the band existed. */
+/* Masthead boundary (2026-10-15 round-3 overlap sweep, measured): the desktop inline nav row's natural width is 1204px (brand lockup 306px unshrunken + 16px gap + 882px nav row); the inner box caps at 1100px (1060px content). The shipped desktop look has been riding the flex squeeze down to the lockup's 162px stacked composition — that squeeze is now the explicit design above the boundary, and everything at or below 1200px gets the clean MENU pattern (the round-2 band fix, widened: at 1101-1115 a classic-scrollbar viewport drops ~16px of content width under the 1060px fit line, which re-opens the overlap class; 1200 owns the band with ~100px of margin to spare). */
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .nav-toggle-label { display: block; }
 
   /* fix 6 (page-structure review): the toggle checkbox is visually hidden
@@ -197,6 +192,15 @@ img { max-width: 100%; height: auto; }
   .main-nav a:hover { background: var(--teal-100); color: var(--teal-900); }
   .main-nav .nav-cta > a { color: var(--orange-dark); }
   .main-nav .nav-cta > a:hover { background: var(--orange-dark); color: #fff; }
+}
+
+/* pixel-pin (round 3): above the 1200 boundary the brand lockup keeps the
+   shipped 162px stacked composition exactly — the row flex there always
+   clears the 1060px fit line (content >= 1161 against a 1204px natural
+   row), so nothing re-squeezes and the desktop rendering is unchanging */
+
+@media (min-width: 1201px) {
+  .logo-link { width: 162px; flex-shrink: 0; }
 }
 
 /* ---------- action banner (ledger row 5: very top of homepage) ----------

@@ -300,6 +300,14 @@ def test_cname_ready_for_domain_flip(docs):
 
 
 def test_every_page_shell_complete(docs):
+    # mid-band masthead boundary (2026-10-15 overlap fix): the phone MENU
+    # pattern owns viewports <=1100px and the desktop inline row lives above
+    # it — measured, the brand lockup only reaches its full composition at
+    # 1100+ (the desktop row's flex squeeze starved it below that). The
+    # served stylesheet carries that boundary and no stale 900px query.
+    css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
+    assert "@media (max-width: 1100px)" in css, "masthead MENU boundary"
+    assert "@media (max-width: 900px)" not in css, "stale 900px boundary"
     for name in html_files(docs):
         if name in REDIRECT_PAGES:
             continue

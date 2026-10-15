@@ -135,7 +135,14 @@ img { max-width: 100%; height: auto; }
 
 .main-nav .submenu a:hover { background: var(--teal-100); color: var(--teal-900); }
 
-@media (max-width: 900px) {
+/* Masthead boundary (2026-10-15 mid-band fix, measured): the desktop inline
+   nav row composes its designed content only at viewports above 1100px
+   (the row's flex squeeze starves the brand lockup below that, which
+   stranded "Home" under it in the 901-1099 band). Everything at or below
+   1100 gets the clean MENU pattern; above it the row fits with margin for
+   the first time and renders exactly as before the band existed. */
+
+@media (max-width: 1100px) {
   .nav-toggle-label { display: block; }
 
   /* fix 6 (page-structure review): the toggle checkbox is visually hidden

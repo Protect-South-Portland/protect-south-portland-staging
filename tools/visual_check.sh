@@ -1,8 +1,11 @@
 #!/bin/bash
 # Multi-viewport visual verification for the PSP static site.
 #
-# Renders homepage + one campaign page at 412 / 768 / 1440 and crops the top
-# band and the footer region of each render into /tmp/psp_visual_check/.
+# Renders homepage + one campaign page at 412 / 768 / 1024 / 1100 / 1440 and
+# crops the top band and the footer region of each render into
+# /tmp/psp_visual_check/. Widths 1024 + 1100 joined 2026-10-15: the
+# masthead overlap defect class lived in the 901-1099 band that none of the
+# original three widths captured.
 # Each width gets a real viewport (dev-browser page.setViewport), so CSS media
 # queries answer at W directly; screenshots are full-page. An earlier
 # revision used a very tall iframe instead, which silently stopped painting
@@ -104,7 +107,7 @@ done
 
 S="$(bb browser-automation open --backend local --headless --machine host_yat733yf8z --json | python3 -c "import json,sys; print(json.load(sys.stdin)['id'])")"
 
-for W in 412 768 1440; do
+for W in 412 768 1024 1100 1440; do
   for PAGE in "" "$CAMPAGE"; do
     NAME="${PAGE:-index}"; NAME="${NAME%.html}"
     FULL="$OUT/${W}_${NAME}_full.png"
@@ -174,7 +177,7 @@ import glob, hashlib, os, sys
 from PIL import Image
 out, min_colors = sys.argv[1], int(sys.argv[2])
 problems = []
-for w in ("412", "768", "1440"):
+for w in ("412", "768", "1024", "1100", "1440"):
     idx = os.path.join(out, f"{w}_index_full.png")
     cf = os.path.join(out, f"{w}_tank-farms_full.png")
     ha = hashlib.md5(open(idx, "rb").read()).hexdigest()

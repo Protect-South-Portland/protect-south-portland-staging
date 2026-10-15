@@ -37,8 +37,7 @@ NAV_BODY = """
 <header class="masthead">
   <div class="masthead__inner">
     <a class="logo-link" href="index.html">
-      <img src="assets/psp-logo.png" alt="Protect South Portland logo">
-      <span class="wordmark">Protect South Portland</span>
+      <img src="assets/psp-logo.png" alt="Protect South Portland">
     </a>
     <input type="checkbox" id="nav-toggle" class="nav-toggle">
     <label class="nav-toggle-label" for="nav-toggle" aria-label="Toggle navigation">MENU</label>

@@ -327,17 +327,16 @@ def test_cname_ready_for_domain_flip(docs):
 
 
 def test_every_page_shell_complete(docs):
-    # mid-band masthead boundary (round-3 sweep, fixed): the phone MENU
-    # pattern owns viewports <=1200px — the desktop row's natural width
-    # measures 1204px, so no narrower band can compose it without overlap,
-    # and 1200 leaves ~100px margin over the 1060px content fit line (the
-    # classic-scrollbar class re-opens 1101-1115). The served stylesheet
-    # carries that boundary, no stale query, and the desktop lockup stays
-    # pinned to its shipped 162px composition above it.
+    # masthead boundary (2026-10-15 de-dupe re-measure: with the text
+    # wordmark gone the single-row desktop nav needs 994px of content
+    # width (seal 96 + 16 gap + 882 nav, measured); boundary = 994 + 40
+    # padding + 16 classic-scrollbar tax + 30 variance margin = 1080. The
+    # served stylesheet carries that boundary and no stale query; the
+    # de-duped masthead keeps exactly one brand carrier: the seal, whose
+    # alt is the accessible brand name.
     css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
-    assert "@media (max-width: 1200px)" in css, "masthead MENU boundary"
-    assert "@media (min-width: 1201px)" in css and "width: 162px" in css, "desktop lockup pin"
-    assert "@media (max-width: 1100px)" not in css and "@media (max-width: 900px)" not in css, "stale boundary"
+    assert "@media (max-width: 1080px)" in css, "masthead MENU boundary"
+    assert "@media (max-width: 1200px)" not in css and "@media (max-width: 900px)" not in css, "stale boundary"
     for name in html_files(docs):
         if name in REDIRECT_PAGES:
             continue
@@ -359,6 +358,12 @@ def test_every_page_shell_complete(docs):
         assert '<a class="skip-link" href="#content">Skip to content</a>' in page, name
         assert 'div class="skip-link"' not in page, name
         assert 'id="nav-toggle"' in page and 'aria-hidden="true"' not in page, name
+        # de-dupe (2026-10-15): one brand carrier — the seal alone in the
+        # masthead with its alt as the accessible brand name; the text
+        # wordmark never renders on any page (the footer's seal keeps its
+        # own "... logo" alt, untouched by the de-dupe).
+        assert '<img src="assets/psp-logo.png" alt="Protect South Portland">' in page, name
+        assert 'wordmark' not in page, name
 
 
 def test_banner_homepage_only(docs):

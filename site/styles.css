@@ -57,17 +57,13 @@ img { max-width: 100%; height: auto; }
   margin: 0 auto;
 }
 
+/* the seal is the single brand carrier (2026-10-15 de-dupe: the text
+   wordmark came off the masthead; its role as the accessible brand name
+   moved to the seal's alt) */
+
 .logo-link { display: flex; align-items: center; gap: 12px; text-decoration: none; }
 
 .logo-link img { width: 96px; display: block; }
-
-.logo-link .wordmark {
-  color: #fff;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  font-size: 1.02rem;
-}
 
 .nav-toggle { display: none; }
 
@@ -135,9 +131,15 @@ img { max-width: 100%; height: auto; }
 
 .main-nav .submenu a:hover { background: var(--teal-100); color: var(--teal-900); }
 
-/* Masthead boundary (2026-10-15 round-3 overlap sweep, measured): the desktop inline nav row's natural width is 1204px (brand lockup 306px unshrunken + 16px gap + 882px nav row); the inner box caps at 1100px (1060px content). The shipped desktop look has been riding the flex squeeze down to the lockup's 162px stacked composition — that squeeze is now the explicit design above the boundary, and everything at or below 1200px gets the clean MENU pattern (the round-2 band fix, widened: at 1101-1115 a classic-scrollbar viewport drops ~16px of content width under the 1060px fit line, which re-opens the overlap class; 1200 owns the band with ~100px of margin to spare). */
+/* Masthead boundary (2026-10-15 de-dupe re-measure, sweep-verified): with the
+   text wordmark removed the single-row desktop nav needs 994px of content
+   width (seal 96px + 16px gap + 882px nav row, measured via the unshrunken
+   flex read at 1440). Boundary: 994 + 40px masthead padding = 1034 (overlay
+   scrollbars), + ~16px classic-scrollbar tax = 1050, + 30px variance margin
+   = 1080. At or below 1080 the clean MENU pattern owns the band; above it
+   the seal + single-row nav compose with the row never squeezed. */
 
-@media (max-width: 1200px) {
+@media (max-width: 1080px) {
   .nav-toggle-label { display: block; }
 
   /* fix 6 (page-structure review): the toggle checkbox is visually hidden
@@ -192,15 +194,6 @@ img { max-width: 100%; height: auto; }
   .main-nav a:hover { background: var(--teal-100); color: var(--teal-900); }
   .main-nav .nav-cta > a { color: var(--orange-dark); }
   .main-nav .nav-cta > a:hover { background: var(--orange-dark); color: #fff; }
-}
-
-/* pixel-pin (round 3): above the 1200 boundary the brand lockup keeps the
-   shipped 162px stacked composition exactly — the row flex there always
-   clears the 1060px fit line (content >= 1161 against a 1204px natural
-   row), so nothing re-squeezes and the desktop rendering is unchanging */
-
-@media (min-width: 1201px) {
-  .logo-link { width: 162px; flex-shrink: 0; }
 }
 
 /* ---------- action banner (ledger row 5: very top of homepage) ----------

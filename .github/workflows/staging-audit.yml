@@ -1,0 +1,27 @@
+name: Staging accessibility audit (non-blocking)
+on:
+  schedule:
+    # Weekday mornings US Eastern (9:15 ET winter / 8:15 summer) — audits the
+    # staging mirror and files one digest issue per run; never blocks a deploy.
+    - cron: "15 13 * * 1-5"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: staging-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit staging and file the digest issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # find_chrome falls back to this; ubuntu runners ship Chrome here
+          CHROME_PATH: /usr/bin/google-chrome
+        run: python3 tools/staging_audit.py

@@ -1,17 +1,27 @@
 # Protect South Portland static site — agent notes
 
-Static HTML/CSS site for Protect South Portland, generated into `docs/` by `tools/build.py`. GitHub Actions on this repo only runs the test suite and a build smoke check — nothing in this repo's CI deploys. The public site lives on the Pages mirrors (`cristoslc/protect-south-portland-published`, plus the staging rehearsal `cristoslc/protect-south-portland-staging`) and is updated only through `tools/publish.py` under the staging-first deployment policy below.
+Static HTML/CSS site for Protect South Portland, generated into `docs/` by `tools/build.py`. GitHub Actions on this repo only runs the test suite, a build smoke check, and the non-blocking scheduled staging audit (issues only — nothing in this repo's CI deploys). The public site lives on the Pages mirrors (`cristoslc/protect-south-portland-published`, plus the staging rehearsal `cristoslc/protect-south-portland-staging`) and is updated only through `tools/publish.py` under the staging-first deployment policy below.
 
 ## Commands
 
 - Build: `python3 tools/build.py`
-- Test: `python3 -m pytest tests/` (declare this as the project's test command)
+- Test: `.venv/bin/python -m pytest tests/` (see Test command)
+
+## Test command
+
+Declared project test command: `.venv/bin/python -m pytest tests/` — the repo venv at `.venv` carries pytest; the system `python3` does not. CI (`pages.yml`) installs pytest on the runner and runs `python -m pytest tests/ -q`.
 
 ## Deployment policy — staging first, prod by exception (operator directive, 2026-10-14)
 
 Every change reaches the public site through the staging mirror first; production is only a reviewed second step. The ladder, always in this order: gate report → staging publish → staging review → prod publish. The staging leg is the publish tool's bare default — `python3 tools/publish.py --gate-report ../gate-reports/<date>.json` targets `cristoslc/protect-south-portland-staging` (hardened 2026-10-14 so a bare run cannot reach production) and keeps the staging custom domain automatically; its URL is `https://staging-b1fa9840.protectsouthportland.org`. Production is reachable only with the explicit flag `--repo cristoslc/protect-south-portland-published`, and nothing goes to prod until the staging leg has an explicit operator sign-off in the thread on top of green automated checks.
 
 A prod push that skips staging (prod-direct) is reserved for extreme exceptional circumstances: it requires the operator's explicit in-thread authorization before it runs, and it must be recorded with a `--note` naming the exception on the publish commit plus a ledger row. The release gate (below) is never skipped by any leg. The full step-by-step runbook lives at `../docs/runbooks/psp-staging-first-deployment.md` (workspace-root `docs/runbooks/`, sibling of this repo).
+
+## Staging audit — non-blocking, automated (2026-10-15)
+
+`tools/staging_audit.py` audits the staging mirror on a schedule and files one digest issue per run on this repo, labeled `staging-audit` + `accessibility` (create-if-absent). Schedule: weekday mornings ~13:15 UTC plus manual `workflow_dispatch`, via `.github/workflows/staging-audit.yml`. Per run it checks every public page for HTTP 200, runs Lighthouse accessibility (desktop) on all pages plus a mobile pass on `index.html`, re-checks the typography floor against the `styles.css` staging actually serves (root `112.5%` + body `1rem` — the same contract `test_typography_older_visitor_floor` pins on the source file), and diffs its findings against the previous run's digest, read from the machine JSON block inside the last `staging-audit` issue.
+
+**Non-blocking contract:** a site-shaped problem (404, Lighthouse failure, floor miss) records a finding and still exits 0 — the audit must never block a deploy pipeline through its own exit code. It exits 1 only when the environment is broken (staging unreachable, Lighthouse crash, gh failure), and those failures are loud. Local ad-hoc pass: `python3 tools/staging_audit.py --base-url <url> --skip-issue` (stdlib only; Lighthouse arrives via npx). The a11y contract this audit guards lives in `../psp/brand-guides/WCAG_COMPLIANCE.md` (verified contrast-pair table, typography floor, known deviations).
 
 ## Hard constraints (tests enforce; never bypass)
 

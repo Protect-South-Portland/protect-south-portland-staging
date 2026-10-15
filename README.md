@@ -62,7 +62,7 @@ The test suite builds the site into a temp dir and enforces the ledger constrain
 
 ## Publish (public mirror)
 
-The public site lives in a separate mirror repo — `cristoslc/protect-south-portland-published` — that carries exactly the campaign pages, local assets, and the standalone map (`map/embed.html`, `map/map.html`). Publish is one command, gate report in hand:
+The public site lives in a separate mirror repo — `cristoslc/protect-south-portland-published` — that carries exactly the campaign pages, local assets, and the standalone map (`map/embed.html`, `map/map.html`). Publish is one command, gate report in hand — and under the 2026-10-14 staging-first directive (AGENTS.md "Deployment policy") the flag-less form below is the prod leg of a cycle, run only after staging sign-off:
 
 ```sh
 python3 tools/publish.py --gate-report ../gate-reports/<date>.json
@@ -70,9 +70,9 @@ python3 tools/publish.py --gate-report ../gate-reports/<date>.json
 
 Details (staging, marker scans, single-commit force-push, DNS-flip step): AGENTS.md, "Publishing to the public mirror".
 
-### Staging rehearsal (`--repo` / `--domain`)
+### Staging leg — the mandatory first publish (`--repo` / `--domain`)
 
-The identical pipeline can target a different public repo — used to rehearse the DNS flip on a staging mirror before touching production:
+The identical pipeline targets the staging mirror — the mandatory first leg of every publish cycle under the 2026-10-14 staging-first directive, and the rehearsal surface for the DNS flip:
 
 ```sh
 python3 tools/publish.py --gate-report ../gate-reports/<date>.json \

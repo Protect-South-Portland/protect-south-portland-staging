@@ -401,6 +401,33 @@ def test_about_links_the_award_video(docs):
     assert "Watch the award video" in page, "video link anchor text missing"
 
 
+def test_homepage_who_we_are_block(docs):
+    """Ledger row 27 (Mindy-sanctioned homepage about-block from Alex's
+    homepage pass): the mission line and the About-PSP paragraph sit verbatim
+    on the homepage under the banner, with Our Story linking about.html and a
+    Get involved link to get-involved.html. The docx parentheticals are
+    author instructions and must not ship; the working-note strings and the
+    fact-flagged grammar quirks stay exactly as written (tone check)."""
+    idx = read(docs, "index.html")
+    assert "We are a community-based, volunteer-run organization working together to protect the environment and the health and well-being of South Portland residents." in idx
+    assert "For over a decade, we" in idx
+    assert "South Portland&rsquo;s precedent-setting Clear Skies Ordinance" in idx
+    assert "a ban on synthetic pesticide" in idx, "grammar quirk must stay verbatim"
+    assert "tar sands oils" in idx, "grammar quirk must stay verbatim"
+    assert "Read more: Our Story" in idx
+    assert 'href="about.html"' in idx, "Our Story must link to about.html"
+    assert "Get involved" in idx
+    assert 'href="get-involved.html"' in idx, "Get involved must link to get-involved.html"
+    # placement: under the banner, before the issue section
+    banner_pos = idx.index('class="banner"')
+    block_pos = idx.index("We are a community-based")
+    issue_pos = idx.index("The issue front and center")
+    assert banner_pos < block_pos < issue_pos
+    # author working notes are not copy
+    for leak in ("Something like this", "Something like that", "link to About Us"):
+        assert leak not in idx, leak
+
+
 def test_embed_url_is_the_public_embedding(docs):
     """The map is self-hosted: both mapping pages iframe map/embed.html from
     this same published tree — no absolute cristoslc.github.io source."""

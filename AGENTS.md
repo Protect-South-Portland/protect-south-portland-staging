@@ -23,6 +23,8 @@ A prod push that skips staging (prod-direct) is reserved for extreme exceptional
 
 **Non-blocking contract:** a site-shaped problem (404, Lighthouse failure, floor miss) records a finding and still exits 0 — the audit must never block a deploy pipeline through its own exit code. It exits 1 only when the environment is broken (staging unreachable, Lighthouse crash, gh failure), and those failures are loud. Local ad-hoc pass: `python3 tools/staging_audit.py --base-url <url> --skip-issue` (stdlib only; Lighthouse arrives via npx). The a11y contract this audit guards lives in `../psp/brand-guides/WCAG_COMPLIANCE.md` (verified contrast-pair table, typography floor, known deviations).
 
+One operational fact from the first run day (2026-10-15): an audit racing a Pages rebuild can read a stale serve (the digest's typography findings then flag the OLD stylesheet). The deltas self-heal — the next run records the stale findings as resolved — so a run right after a publish should be read together with whatever follows it.
+
 ## Hard constraints (tests enforce; never bypass)
 
 1. No links to the tank-farms research surfaces anywhere public: `report.html`, `factcheck.html`, `data.html`, `github.com/cristoslc/south-portland-tank-farms`, or their nav labels ("Research report", "Fact-check log", "Data files", "GitHub repo"). The map is self-hosted: index.html and tank-farms.html iframe the RELATIVE `map/embed.html` copy built into this repo's `docs/` (constraint text revised 2026-10-13 by orchestrator — the absolute github.io embed URL is superseded; the publish scanner also bans that host from the public tree).

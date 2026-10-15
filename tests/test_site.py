@@ -327,16 +327,17 @@ def test_cname_ready_for_domain_flip(docs):
 
 
 def test_every_page_shell_complete(docs):
-    # masthead boundary (2026-10-15 de-dupe re-measure: with the text
-    # wordmark gone the single-row desktop nav needs 994px of content
-    # width (seal 96 + 16 gap + 882 nav, measured); boundary = 994 + 40
-    # padding + 16 classic-scrollbar tax + 30 variance margin = 1080. The
-    # served stylesheet carries that boundary and no stale query; the
-    # de-duped masthead keeps exactly one brand carrier: the seal, whose
-    # alt is the accessible brand name.
+    # masthead boundary (2026-10-15 readability re-measure): the older-visitor
+    # root scale (112.5%) enlarged the rem-based nav row past the masthead's
+    # 1060px content cap, so nav links settle at 0.9rem (gaps halved to 2px)
+    # and the boundary was re-measured (1021px content + 40 padding + 16
+    # scrollbar tax + 30 margin = 1107, rounded to 1120) — numbers recorded in styles.css above the
+    # boundary. The served stylesheet carries that boundary and no stale
+    # query. The de-duped masthead keeps exactly one brand carrier: the seal,
+    # whose alt is the accessible brand name.
     css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
-    assert "@media (max-width: 1080px)" in css, "masthead MENU boundary"
-    assert "@media (max-width: 1200px)" not in css and "@media (max-width: 900px)" not in css, "stale boundary"
+    assert "@media (max-width: 1120px)" in css, "masthead MENU boundary"
+    assert "@media (max-width: 1080px)" not in css and "@media (max-width: 1200px)" not in css, "stale boundary"
     for name in html_files(docs):
         if name in REDIRECT_PAGES:
             continue
@@ -974,3 +975,32 @@ def test_publish_parser_hardening_flags():
     assert args.wait_https is True
     args = parser.parse_args(["--gate-report", "g", "--no-wait-https"])
     assert args.wait_https is False
+
+
+def test_typography_older_visitor_floor():
+    # Older-visitor readability pass (2026-10-15): the root scale rides the
+    # visitor's own browser font setting (112.5% of it = 18px at defaults),
+    # and body reading copy sits at exactly 1rem so every paragraph that
+    # inherits the body (prose, cards, placeholder notes — whose own
+    # font-size lines were dropped for that) lands on 18px and scales
+    # together with every rem-based secondary size. The old fixed 17px body
+    # broke that chain, and a fixed body floor is exactly what made the site
+    # read small to older visitors. The staging audit
+    # (tools/staging_audit.py) re-checks this against whatever the mirror
+    # actually serves.
+    css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
+    assert "font-size: 112.5%" in css, "accessibility root scale (html)"
+    assert "\n  font-size: 1rem;\n" in css, "body floor follows the root in rem"
+    assert "font-size: 17px" not in css, "fixed px body defeats user scaling"
+
+
+def test_footer_cta_contrast_wins_over_footer_link_color():
+    # Lighthouse color-contrast, 2026-10-15 staging audit: `.footer a`
+    # (0,1,1) out-specifies `.btn--cta` (0,1,0), so the footer DONATE
+    # button rendered #bfeaf4 on --orange-dark (4.30:1, below AA for its
+    # 17px bold) instead of white (5.55:1). The CTA keeps its own white
+    # on the orange fill; the hover path goes darker (white on
+    # #9c3615, 7.11:1).
+    css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
+    assert re.search(r"\.footer \.btn--cta\s*\{[^}]*color:\s*#fff", css), \
+        "footer .btn--cta must re-pin white text on the orange fill"

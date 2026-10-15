@@ -22,14 +22,21 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+/* Older-visitor readability (2026-10-15): the root carries the type scale as
+   a percentage of the visitor's own browser font setting — 112.5% of it is
+   18px at browser defaults, and a visitor who enlarged their default keeps
+   their larger base. Body reading copy rides the root at exactly 1rem
+   (18px), and every rem-based secondary size on the site scales together
+   (see the masthead boundary note below). */
+
+html { scroll-behavior: smooth; font-size: 112.5%; }
 
 body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
   font-family: "Avenir Next", Avenir, "Segoe UI", system-ui, -apple-system, sans-serif;
-  font-size: 17px;
+  font-size: 1rem;
   line-height: 1.65;
 }
 
@@ -78,7 +85,7 @@ img { max-width: 100%; height: auto; }
   user-select: none;
 }
 
-.main-nav > ul { list-style: none; display: flex; gap: 4px; margin: 0; padding: 0; align-items: center; }
+.main-nav > ul { list-style: none; display: flex; gap: 2px; margin: 0; padding: 0; align-items: center; }
 
 .main-nav li { position: relative; }
 
@@ -87,7 +94,7 @@ img { max-width: 100%; height: auto; }
   color: #e6f1f1;
   text-decoration: none;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   padding: 10px 12px;
   border-radius: 8px;
   white-space: nowrap;
@@ -131,15 +138,21 @@ img { max-width: 100%; height: auto; }
 
 .main-nav .submenu a:hover { background: var(--teal-100); color: var(--teal-900); }
 
-/* Masthead boundary (2026-10-15 de-dupe re-measure, sweep-verified): with the
-   text wordmark removed the single-row desktop nav needs 994px of content
-   width (seal 96px + 16px gap + 882px nav row, measured via the unshrunken
-   flex read at 1440). Boundary: 994 + 40px masthead padding = 1034 (overlay
-   scrollbars), + ~16px classic-scrollbar tax = 1050, + 30px variance margin
-   = 1080. At or below 1080 the clean MENU pattern owns the band; above it
-   the seal + single-row nav compose with the row never squeezed. */
+/* Masthead boundary (2026-10-15 readability re-measure): the older-visitor
+   root scale (112.5%) enlarges every rem-based nav size by 12.5%; at 0.95rem
+   that grew the single-row desktop nav to 1072px of need against the 1060px
+   content cap (1100px border-box inner minus 40px padding) and squeezed the
+   seal image (the only shrinkable element) to 84px — violating the "row
+   never squeezed" lockup. Nav links settle at 0.9rem (16.2px, still larger
+   than the pre-bump 15.2px) with link gaps halved to 2px: nav row 909px
+   measured via the unshrunken flex read at 1440, content = seal 96px +
+   16px gap + 909 = 1021. Boundary: 1021 + 40px masthead padding = 1061
+   (overlay scrollbars), + ~16px classic-scrollbar tax = 1077, + 30px
+   variance margin = 1107, rounded up to 1120.
+   At or below 1120 the clean MENU pattern owns the band; above it the
+   seal + single-row nav compose with the row never squeezed. */
 
-@media (max-width: 1080px) {
+@media (max-width: 1120px) {
   .nav-toggle-label { display: block; }
 
   /* fix 6 (page-structure review): the toggle checkbox is visually hidden
@@ -239,7 +252,6 @@ img { max-width: 100%; height: auto; }
 
 .banner__mission {
   margin: 0;
-  font-size: 0.98rem;
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.88);
 }
@@ -280,7 +292,10 @@ img { max-width: 100%; height: auto; }
 
 .section--intro { padding: 26px 0; }
 
-.prose--intro p { font-size: 0.95rem; color: var(--muted); }
+/* reading copy (prose, cards, placeholder notes) inherits the body's 1rem
+   floor — 18px at default root, scales with each visitor's browser setting */
+
+.prose--intro p { color: var(--muted); }
 
 /* fix 2 (page-structure review): the strip's links read as a two-item link
    row after the paragraph, not a run-on inside the sentence flow */
@@ -383,7 +398,7 @@ blockquote {
 
 .card h3 { margin: 0 0 8px; }
 
-.card p { color: var(--muted); font-size: 0.95rem; flex: 1; }
+.card p { color: var(--muted); flex: 1; }
 
 .card .card__more { font-weight: 800; text-decoration: none; }
 
@@ -438,6 +453,12 @@ blockquote {
 .footer__donate p { color: #cfe6e6; }
 
 .footer__donate .btn { margin-top: 6px; }
+
+/* the footer's link color out-specifies .btn--cta and left the DONATE
+   button #bfeaf4-on-orange-dark (4.30:1, Lighthouse-found 2026-10-15);
+   the CTA keeps white on the orange fill (5.55:1) */
+
+.footer .btn--cta { color: #fff; }
 
 .footer__base {
   display: flex;
@@ -512,7 +533,7 @@ blockquote {
 
 .card--photo h3 { margin: 0 0 8px; }
 
-.card--photo p { color: var(--muted); font-size: 0.95rem; flex: 1; }
+.card--photo p { color: var(--muted); flex: 1; }
 
 .card--photo .card__more { display: inline-block; padding-bottom: 12px; }
 
@@ -543,7 +564,6 @@ blockquote {
   border-radius: 12px;
   padding: 14px 16px;
   color: var(--ink);
-  font-size: 0.95rem;
   margin: 1.2em 0;
 }
 

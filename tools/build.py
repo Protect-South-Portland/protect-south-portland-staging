@@ -33,14 +33,14 @@ REDIRECTS = {
 META_RE = re.compile(r'<!--\s*meta:\s*title="(?P<title>[^"]*)"\s*\|\s*desc="(?P<desc>[^"]*)"\s*-->\s*\n?')
 
 NAV_BODY = """
-<div class="skip-link"><a class="skip-link" href="#content">Skip to content</a></div>
+<a class="skip-link" href="#content">Skip to content</a>
 <header class="masthead">
   <div class="masthead__inner">
     <a class="logo-link" href="index.html">
       <img src="assets/psp-logo.png" alt="Protect South Portland logo">
       <span class="wordmark">Protect South Portland</span>
     </a>
-    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-hidden="true">
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
     <label class="nav-toggle-label" for="nav-toggle" aria-label="Toggle navigation">MENU</label>
     <nav class="main-nav" aria-label="Main">
       <ul>
@@ -132,7 +132,9 @@ SHELL = """<!DOCTYPE html>
 </head>
 <body>
 {nav}
+<main id="content">
 {body}
+</main>
 {footer}
 </body>
 </html>

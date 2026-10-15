@@ -312,6 +312,15 @@ def test_every_page_shell_complete(docs):
         assert 'href="donate.html"' in page, name  # footer donate strip
         assert 'class="masthead"' in page, name
         assert 'class="footer"' in page, name
+        # page-structure patch (2026-10-14 review, fixes 4 + 6): every page
+        # carries one main landmark between the masthead and the footer, a
+        # skip link that targets it without the stuck off-screen wrapper,
+        # and a keyboard-focusable nav toggle with no aria-hidden.
+        assert page.count('<main id="content">') == 1 and page.count("</main>") == 1, name
+        assert page.index('class="masthead"') < page.index('<main id="content">') < page.index('class="footer"'), name
+        assert '<a class="skip-link" href="#content">Skip to content</a>' in page, name
+        assert 'div class="skip-link"' not in page, name
+        assert 'id="nav-toggle"' in page and 'aria-hidden="true"' not in page, name
 
 
 def test_banner_homepage_only(docs):
@@ -420,9 +429,10 @@ def test_homepage_who_we_are_block(docs):
     on the homepage — the mission folds into the banner as its sign-off and
     the About paragraph sits in a compact strip between the hero photo and
     the issue section (2026-10-14 single-hero design pass), with Our Story
-    linking about.html and a Get involved inline text link to
-    get-involved.html (2026-10-14 design round 2: it is prose, not a button —
-    the banner Act now is the only button idiom in the first screen). The
+    linking about.html and a Get involved link to get-involved.html — after
+    the 2026-10-14 design round 2 both read as list items in a two-item link
+    row (page-structure patch): prose, not buttons; the banner Act now is the
+    only button idiom in the first screen. The
     docx parentheticals are author instructions and must not ship; the
     working-note strings and the fact-flagged grammar quirks stay exactly as
     written (tone check)."""
@@ -436,24 +446,30 @@ def test_homepage_who_we_are_block(docs):
     assert 'href="about.html"' in idx, "Our Story must link to about.html"
     assert "Get involved" in idx
     assert 'href="get-involved.html"' in idx, "Get involved must link to get-involved.html"
-    # design round 2: exactly one button idiom in the first screen — the
-    # banner Act now. The strip carries Get involved as an inline text link
-    # inside the prose flow (no class, no btn idiom), not a second button.
+    # design round 2 + page-structure patch: exactly one button idiom in the
+    # first screen — the banner Act now — and the strip's links read as a
+    # two-item link row after the paragraph (labels and hrefs char-for-char;
+    # the paragraph ends at its own period), not a run-on, not stacked buttons.
     idx_top = idx[idx.index('class="banner"'):idx.index("The issue front and center")]
     assert idx_top.count('class="btn') == 1, "only the banner Act now is a button in the top flow"
     assert "intro-cta" not in idx and "btn--ghost" not in idx_top
-    assert '<a href="get-involved.html">Get involved</a>' in idx_top, \
-        "the strip Get involved must be a plain class-less text link"
-    # final top-of-page order: banner (mission folded in as its sign-off)
-    # -> hero photo band -> who-we-are strip (Get involved inline at its end)
-    # -> issue section
+    assert "meaningful actions.</p>" in idx and "Our Story</a> <a" not in idx, "strip ends at its own period"
+    row_pos = idx.index('<ul class="link-row">')
+    row = idx[row_pos:idx.index("</ul>", row_pos)]
+    assert row.count('<li><a href="about.html">Read more: Our Story</a></li>') == 1
+    assert row.count('<li><a href="get-involved.html">Get involved</a></li>') == 1
+    # heading order (fix 3): the banner headline is the page's single h1
+    assert idx.count("<h1") == 1 and '<h1 class="banner__headline">' in idx
+    assert '<p class="banner__headline">' not in idx
+    # final top-of-page order: banner (mission folded in as its sign-off, and
+    # now the h1) -> hero photo band -> who-we-are strip -> link row (inside
+    # the strip, after the paragraph) -> issue section
     banner_pos = idx.index('class="banner"')
     mission_pos = idx.index("We are a community-based")
     hero_pos = idx.index('class="hero-band')
     strip_pos = idx.index("For over a decade, we")
-    gi_pos = idx.index('href="get-involved.html">Get involved</a>', strip_pos)
     issue_pos = idx.index("The issue front and center")
-    assert banner_pos < mission_pos < hero_pos < strip_pos < gi_pos < issue_pos
+    assert banner_pos < mission_pos < hero_pos < strip_pos < row_pos < issue_pos
     # author working notes are not copy
     for leak in ("Something like this", "Something like that", "link to About Us"):
         assert leak not in idx, leak

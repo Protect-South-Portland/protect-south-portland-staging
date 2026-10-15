@@ -11,6 +11,7 @@
   --cyan-soft: #d5f6f6;
   --orange: #de5021;
   --orange-dark: #b8401a;
+  --orange-darker: #9c3615;
   --ink: #26383a;
   --muted: #5c6b6d;
   --line: #dde8e8;
@@ -120,13 +121,45 @@ img { max-width: 100%; height: auto; }
   z-index: 60;
 }
 
-.submenu a { padding: 8px 12px; font-size: 0.9rem; }
+/* dropdown links sit on a white panel; the masthead's pale ink fails there,
+   so the menu text contrast fix gives the panel its own dark ink (2026-10-14
+   page-structure review, fix 1) */
+
+.submenu a { padding: 8px 12px; font-size: 0.9rem; color: var(--teal-900); }
 
 .main-nav .has-sub:hover > .submenu,
 .main-nav .has-sub:focus-within > .submenu { display: block; }
 
+/* same defect class on the white panel: the shared hover turns the link
+   white, so give submenu links their own hover */
+
+.main-nav .submenu a:hover { background: var(--teal-100); color: var(--teal-900); }
+
 @media (max-width: 900px) {
   .nav-toggle-label { display: block; }
+
+  /* fix 6 (page-structure review): the toggle checkbox is visually hidden
+     but keyboard-focusable — Space on it opens the menu, and the
+     :focus-visible outline lands on the MENU label. Desktop keeps it
+     display:none: there the plain nav links are already in the tab order,
+     and a focusable invisible checkbox would be an unindicated tab stop. */
+  .nav-toggle {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .nav-toggle:focus-visible + .nav-toggle-label {
+    outline: 3px solid var(--cyan-soft);
+    outline-offset: 2px;
+  }
   .main-nav {
     display: none;
     position: absolute;
@@ -149,6 +182,14 @@ img { max-width: 100%; height: auto; }
     padding: 2px 0 2px 8px;
     margin: 2px 0 6px;
   }
+
+  /* fix 1 (page-structure review): the phone menu panel is white; dark ink
+     for menu links, dark-orange for the Act now nav item (5.55:1) */
+
+  .main-nav a { color: var(--teal-900); }
+  .main-nav a:hover { background: var(--teal-100); color: var(--teal-900); }
+  .main-nav .nav-cta > a { color: var(--orange-dark); }
+  .main-nav .nav-cta > a:hover { background: var(--orange-dark); color: #fff; }
 }
 
 /* ---------- action banner (ledger row 5: very top of homepage) ----------
@@ -173,6 +214,7 @@ img { max-width: 100%; height: auto; }
 
 .banner__headline {
   margin: 0;
+  color: inherit;
   font-size: clamp(1.2rem, 2.6vw, 1.6rem);
   font-weight: 800;
   line-height: 1.3;
@@ -213,8 +255,11 @@ img { max-width: 100%; height: auto; }
   cursor: pointer;
 }
 
-.btn--cta { background: var(--orange); color: #fff; }
-.btn--cta:hover { background: var(--orange-dark); }
+/* fix 5 (page-structure review): white on --orange is 3.98:1; white on
+   --orange-dark is 5.55:1, and the hover steps darker still */
+
+.btn--cta { background: var(--orange-dark); color: #fff; }
+.btn--cta:hover { background: var(--orange-darker); }
 
 .btn--ghost { background: transparent; color: var(--teal-900); border-color: var(--teal-900); }
 .btn--ghost:hover { background: var(--teal-100); }
@@ -232,6 +277,13 @@ img { max-width: 100%; height: auto; }
 .section--intro { padding: 26px 0; }
 
 .prose--intro p { font-size: 0.95rem; color: var(--muted); }
+
+/* fix 2 (page-structure review): the strip's links read as a two-item link
+   row after the paragraph, not a run-on inside the sentence flow */
+
+.link-row { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 26px; margin: 10px 0 0; padding: 0; font-weight: 700; font-size: 0.95rem; }
+
+.link-row li { margin: 0; }
 
 .section--mist { background: var(--mist); }
 

@@ -420,7 +420,9 @@ def test_homepage_who_we_are_block(docs):
     on the homepage — the mission folds into the banner as its sign-off and
     the About paragraph sits in a compact strip between the hero photo and
     the issue section (2026-10-14 single-hero design pass), with Our Story
-    linking about.html and a Get involved link to get-involved.html. The
+    linking about.html and a Get involved inline text link to
+    get-involved.html (2026-10-14 design round 2: it is prose, not a button —
+    the banner Act now is the only button idiom in the first screen). The
     docx parentheticals are author instructions and must not ship; the
     working-note strings and the fact-flagged grammar quirks stay exactly as
     written (tone check)."""
@@ -434,14 +436,24 @@ def test_homepage_who_we_are_block(docs):
     assert 'href="about.html"' in idx, "Our Story must link to about.html"
     assert "Get involved" in idx
     assert 'href="get-involved.html"' in idx, "Get involved must link to get-involved.html"
+    # design round 2: exactly one button idiom in the first screen — the
+    # banner Act now. The strip carries Get involved as an inline text link
+    # inside the prose flow (no class, no btn idiom), not a second button.
+    idx_top = idx[idx.index('class="banner"'):idx.index("The issue front and center")]
+    assert idx_top.count('class="btn') == 1, "only the banner Act now is a button in the top flow"
+    assert "intro-cta" not in idx and "btn--ghost" not in idx_top
+    assert '<a href="get-involved.html">Get involved</a>' in idx_top, \
+        "the strip Get involved must be a plain class-less text link"
     # final top-of-page order: banner (mission folded in as its sign-off)
-    # -> hero photo band -> who-we-are strip -> issue section
+    # -> hero photo band -> who-we-are strip (Get involved inline at its end)
+    # -> issue section
     banner_pos = idx.index('class="banner"')
     mission_pos = idx.index("We are a community-based")
     hero_pos = idx.index('class="hero-band')
     strip_pos = idx.index("For over a decade, we")
+    gi_pos = idx.index('href="get-involved.html">Get involved</a>', strip_pos)
     issue_pos = idx.index("The issue front and center")
-    assert banner_pos < mission_pos < hero_pos < strip_pos < issue_pos
+    assert banner_pos < mission_pos < hero_pos < strip_pos < gi_pos < issue_pos
     # author working notes are not copy
     for leak in ("Something like this", "Something like that", "link to About Us"):
         assert leak not in idx, leak

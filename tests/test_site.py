@@ -1004,3 +1004,19 @@ def test_footer_cta_contrast_wins_over_footer_link_color():
     css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
     assert re.search(r"\.footer \.btn--cta\s*\{[^}]*color:\s*#fff", css), \
         "footer .btn--cta must re-pin white text on the orange fill"
+
+
+def test_heading_order_is_sequential(docs):
+    # Staging audit digest #4 (2026-10-15): tank-farms.html and
+    # our-campaigns.html opened their outline with an h3 directly under the
+    # h1. Structure pin only — heading TEXT is unchanged; a retagged heading
+    # keeps its visual h3 look via the .h3-look class in styles.css.
+    for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue  # stubs have no headings; Lighthouse audits their target
+        levels = [int(m.group(1)) for m in re.finditer(r"<h([1-6])\b", read(docs, name))]
+        assert levels, f"{name}: no headings"
+        assert levels[0] == 1, f"{name}: outline must open at h1, opens at h{levels[0]}"
+        for prev, cur in zip(levels, levels[1:]):
+            assert cur <= prev + 1, (
+                f"{name}: heading level jumps h{prev} -> h{cur}; outline not sequential")

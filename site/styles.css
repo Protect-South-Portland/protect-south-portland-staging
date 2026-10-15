@@ -326,6 +326,16 @@ h2 { color: var(--teal-900); font-size: clamp(1.4rem, 3vw, 1.9rem); line-height:
 
 h3 { color: var(--teal-700); margin: 1.6em 0 0.5em; }
 
+/* heading-order fix (2026-10-15 staging audit, digest #4): pages that held
+   h3s directly under their h1 retag them to h2 so the outline runs
+   sequential; this class carries the retired h3's exact look (size, color,
+   margins) so no copy or design changes ride along. tank-farms.html keeps
+   its prose margins; the card--photo override matches .card--photo h3. */
+
+h2.h3-look { font-size: 1em; color: var(--teal-700); margin: 1.6em 0 0.5em; }
+
+.card--photo h2.h3-look { margin: 0 0 8px; }
+
 p { margin: 0 0 1em; }
 
 .lede { font-size: 1.13rem; }

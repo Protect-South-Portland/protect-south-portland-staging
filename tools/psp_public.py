@@ -76,6 +76,13 @@ BINARY_EXTENSIONS = {
 MAP_DIRNAME = "map"
 MAP_FILES = ("embed.html", "map.html", "styles.css")
 
+# The verbatim homepage banner (ledger row 5). publish.py's domain check
+# compares the served index with the local build, falling back to this
+# line; the tests pin the same string from here so the banner has one
+# source of truth.
+BANNER_TEXT = ("Tell our leaders to stop tank farms from dumping hazardous "
+               "pollutants in our neighborhoods.")
+
 SITE_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # The standalone map pages are generated in the private tank-farms repo

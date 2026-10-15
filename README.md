@@ -82,6 +82,8 @@ python3 tools/publish.py --gate-report ../gate-reports/<date>.json \
 
 `--repo` swaps the push target (owner/name; default stays the production mirror), and `--domain` stages the hostname as the tree's `CNAME` and sets it as that repo's Pages custom domain. Omitted flags freeze production behavior: the production mirror repo, no staged CNAME (the site repo's `docs/CNAME` for the real flip stays out of the tree). A `--mirror-dir` that is not the target's default checkout remains local verification only.
 
+Post-publish verification is hard against the two DNS-flip traps: the github.io check refuses to follow redirects off `*.github.io` (aborting with "custom DNS already live" instead of passing over a NetSol/Wix forward), and a `--domain` publish is only "done" when `https://<hostname>` serves the built index over a hostname-valid TLS certificate, after which the tool polls the Pages API and sets `https_enforced=true` (`--no-wait-https` leaves it manual; on timeout it fails loud with the Enforce HTTPS manual step). A publish with no `--domain` against a repo that already carries a custom domain is refused (`--allow-domain-drop` overrides explicitly) — a default run can never silently clear the CNAME.
+
 ## Repo structure
 
 ```

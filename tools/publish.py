@@ -28,15 +28,20 @@ Usage:
   python3 tools/publish.py --gate-report ... --repo <owner/name> \
       --domain <hostname>
       (same pipeline against another public repo — orphan commit, gate
-       report, marker scan, Pages enable with the custom domain; used for
-       the staging mirror rehearsed before the DNS flip. Omitted flags keep
-       the production behavior frozen: the mirror repo, no staged CNAME)
+       report, marker scan, Pages enable with the custom domain; then
+       https://<hostname> is verified over a hostname-valid TLS
+       connection and https_enforced is set once the certificate is
+       approved (--no-wait-https skips the wait); a target repo that
+       already carries a Pages custom domain is refused without --domain
+       or an explicit --allow-domain-drop)
 """
 import argparse
 import datetime
 import json
 import os
 import shutil
+import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -305,22 +310,175 @@ def ensure_pages_enabled(repo, cname=None):
                 f"expected {cname!r}")
 
 
-def wait_for_pages(urls, minutes=8):
+def wait_for_pages(urls, minutes=8, allowed_domains=None):
+    """Wait for the URLs to serve 200, asserting the redirect chain stays
+    under the allowed set.
+
+    allowed_domains=None (the github.io verification pass) requires the
+    FINAL URL to stay under *.github.io: when it lands elsewhere (the
+    custom domain after the flip, or NetSol's forward to Wix), fail loud
+    immediately instead of timing out or worse, "verifying" over the
+    wrong site's bytes. With --domain the allowed set is exactly that
+    hostname.
+    """
     pending = list(urls)
     deadline = time.time() + minutes * 60
     while pending and time.time() < deadline:
-        time.sleep(15)
         still = []
         for url in pending:
             try:
                 with urllib.request.urlopen(url, timeout=20) as resp:
-                    if resp.status != 200:
-                        still.append(url)
+                    status, final_url = resp.status, resp.geturl()
             except Exception:
                 still.append(url)
+                continue
+            host = urllib.request.urlsplit(final_url).hostname or ""
+            ok = (host in allowed_domains if allowed_domains
+                  else host.endswith(".github.io"))
+            if not ok:
+                raise SystemExit(
+                    f"{url}\n  final URL is {final_url!r} (host {host!r})\n"
+                    "  custom DNS already live — verify the custom domain "
+                    "instead, or DNS not yet moved")
+            if status != 200:
+                still.append(url)
         pending = still
+        if pending:
+            time.sleep(15)
     if pending:
-        raise SystemExit("Pages not serving after the wait: " + ", ".join(pending))
+        raise SystemExit(
+            "Pages not serving after the wait: " + ", ".join(pending) +
+            ("\n  (DNS record or TLS certificate for the custom domain may "
+             "still be provisioning — cert issuance can take up to 24 hours)"
+             if allowed_domains else ""))
+
+
+def pages_api(repo):
+    """GET the repo's Pages settings, or None when Pages is not enabled."""
+    proc = subprocess.run(
+        ["gh", "api", f"repos/{repo}/pages"], capture_output=True, text=True)
+    if proc.returncode == 0:
+        return json.loads(proc.stdout)
+    if "404" in proc.stderr or "Not Found" in proc.stderr:
+        return None
+    raise SystemExit(f"reading Pages settings failed:\n{proc.stderr}")
+
+
+def cert_state(pages_state):
+    """The HTTP-certificate status from a Pages API body, whatever shape
+    the API shows today (none so far / dict with .state / plain string)."""
+    cert = (pages_state or {}).get("https_certificate")
+    if isinstance(cert, dict):
+        return cert.get("state")
+    return cert
+
+
+def domain_stickiness_violation(state, requested_cname, allow_drop):
+    """Abort reason when a CNAME-less tree would clear the target repo's
+    custom domain (legacy "branch" builds read the domain from the
+    CNAME file), or None when the publish may proceed."""
+    current = (state or {}).get("cname")
+    protected = (state or {}).get("protected_domain_state") == "verified"
+    if not current and not protected:
+        return None
+    if allow_drop and requested_cname:
+        return "--allow-domain-drop conflicts with --domain: pass one or " \
+               "the other, never both"
+    if allow_drop or requested_cname:
+        return None
+    return (
+        f"this repo already carries the Pages custom domain {current!r}; a "
+        "tree staged without --domain would clear it on the next Pages "
+        "build. Re-run with --domain " + (current or "<current domain>") +
+        " to keep publishing against it, or pass --allow-domain-drop "
+        "explicitly to drop the custom domain.")
+
+
+def check_domain_stickiness(repo, requested_cname, allow_drop):
+    violation = domain_stickiness_violation(
+        pages_api(repo), requested_cname, allow_drop)
+    if violation:
+        raise SystemExit(violation)
+
+
+def tls_cert_subject(host, timeout=20):
+    """Peer certificate from a hostname-verified (SNI + SAN matched) TLS
+    handshake; a name mismatch or invalid chain raises."""
+    ctx = ssl.create_default_context()
+    with socket.create_connection((host, 443), timeout=timeout) as sock:
+        with ctx.wrap_socket(sock, server_hostname=host) as tls:
+            cert = tls.getpeercert()
+    common = next(
+        (value for rdn in cert.get("subject", ()) for key, value in rdn
+         if key == "commonName"), None)
+    return common, cert.get("notAfter")
+
+
+def index_matches_built(text, index_path):
+    """The served index equals the freshly built one, or at least carries
+    the verbatim banner line (ledger row 5)."""
+    if not os.path.exists(index_path):
+        return False
+    return (text == open(index_path, encoding="utf-8").read()
+            or psp_public.BANNER_TEXT in text)
+
+
+def verify_custom_domain(domain, index_path, minutes=8):
+    """Blocking gate: the custom domain must serve the staged tree over a
+    hostname-valid TLS connection before the publish claims success."""
+    wait_for_pages([f"https://{domain}/",
+                    f"https://{domain}/map/embed.html",
+                    f"https://{domain}/map/map.html"],
+                   minutes=minutes, allowed_domains=(domain,))
+    common, not_after = tls_cert_subject(domain)
+    with urllib.request.urlopen(f"https://{domain}/", timeout=20) as resp:
+        if resp.status != 200:
+            raise SystemExit(f"https://{domain}/ returned {resp.status}")
+        text = resp.read().decode("utf-8", errors="replace")
+    if not index_matches_built(text, index_path):
+        raise SystemExit(
+            f"https://{domain}/: the served index matches neither the "
+            f"built index ({index_path}) nor the banner line")
+    return f"TLS commonName {common!r} (notAfter {not_after})"
+
+
+def put_https_enforced(repo):
+    proc = subprocess.run(
+        ["gh", "api", "-X", "PUT", f"repos/{repo}/pages",
+         "-F", "https_enforced=true"],
+        capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise SystemExit(f"PUT https_enforced=true failed:\n{proc.stderr}")
+
+
+def assert_flag_agreement(domain, wait_https):
+    """--wait-https/--no-wait-https have no meaning without a custom domain."""
+    if wait_https is not None and not domain:
+        raise SystemExit(
+            "--wait-https/--no-wait-https apply only to custom-domain "
+            "publishes: pass --domain as well")
+
+
+def enforce_https(repo, minutes=60, clock=time.time, pause=time.sleep):
+    """Poll the Pages API until the HTTPS certificate is approved, then
+    set https_enforced=true. On timeout, fail loud with the manual step —
+    never silently continue without encryption."""
+    MANUAL = (f"{repo}: HTTPS certificate not approved after {minutes} "
+              "minutes. Manual step: repo Pages settings → Enforce HTTPS "
+              "once the certificate shows available, then re-run the "
+              "verification.")
+    deadline = clock() + minutes * 60
+    while True:
+        state = pages_api(repo) or {}
+        if state.get("https_enforced"):
+            return state
+        if cert_state(state) == "approved":
+            put_https_enforced(repo)
+            if (pages_api(repo) or {}).get("https_enforced"):
+                return pages_api(repo)
+        if clock() >= deadline:
+            raise SystemExit(MANUAL)
+        pause(30)
 
 
 def build_parser():
@@ -343,6 +501,19 @@ def build_parser():
                              "as the target repo's Pages custom domain (default: "
                              "none — the mirror keeps its github.io URL until the "
                              "operator flips DNS)")
+    parser.add_argument("--allow-domain-drop", action="store_true",
+                        help="explicit override letting a publish proceed without "
+                             "--domain even though the target repo carries a Pages "
+                             "custom domain (which the staged CNAME-less tree then "
+                             "clears on the next build)")
+    wait = parser.add_mutually_exclusive_group()
+    wait.add_argument("--wait-https", dest="wait_https",
+                      action="store_true", default=None,
+                      help="wait for the HTTPS certificate and set https_enforced "
+                           "(default behavior for --domain publishes)")
+    wait.add_argument("--no-wait-https", dest="wait_https",
+                      action="store_false", default=None,
+                      help="skip the HTTPS wait/enforcement step (leave it manual)")
     parser.add_argument("--mirror-dir", default=None,
                         help="target checkout (default: the clone of --repo; "
                              "any other path = local verification only)")
@@ -355,9 +526,14 @@ def main():
     is_remote_target = os.path.abspath(
         mirror_dir) == os.path.abspath(default_mirror_dir(args.repo))
     pages_base = repo_pages_base(args.repo)
+    assert_flag_agreement(args.domain, args.wait_https)
 
     review_model, per_page = load_gate_report(args.gate_report)
     require_clean_worktree()
+    if is_remote_target:
+        # Before anything is pushed or built: a default publish must not
+        # silently clear a custom domain the target repo already carries.
+        check_domain_stickiness(args.repo, args.domain, args.allow_domain_drop)
     build_site()
 
     staging = tempfile.mkdtemp(prefix="psp-publish-")
@@ -385,15 +561,38 @@ def main():
         sha = single_commit(mirror_dir, message)
         run(["git", "push", "--force", "origin", "main"], cwd=mirror_dir)
         ensure_pages_enabled(args.repo, cname=args.domain)
-        wait_for_pages([pages_base + "/",
-                        pages_base + "/map/embed.html",
-                        pages_base + "/map/map.html"])
-        print(f"published commit {sha} ({file_count} files) to {args.repo}")
         if args.domain:
-            print(f"custom domain: {args.domain} "
-                  "(staged as CNAME and set in Pages settings)")
-        print(f"site: {pages_base}/")
-        print(f"map: {pages_base}/map/map.html")
+            cert_note = verify_custom_domain(
+                args.domain, os.path.join(ROOT, "docs", "index.html"))
+            wait_https = args.wait_https if args.wait_https is not None else True
+            if wait_https:
+                final_state = enforce_https(args.repo)
+            print(f"published commit {sha} ({file_count} files) to {args.repo}")
+            print(f"site: https://{args.domain}/")
+            print(f"map: https://{args.domain}/map/map.html")
+            print(f"tls: {cert_note}")
+            print("index: the served index matches the built index "
+                  "(or carries the banner line)")
+            if wait_https:
+                print("https: enforced — polled the Pages API for the "
+                      "certificate, then set https_enforced=true")
+        else:
+            wait_for_pages([pages_base + "/",
+                            pages_base + "/map/embed.html",
+                            pages_base + "/map/map.html"])
+            print(f"published commit {sha} ({file_count} files) to {args.repo}")
+            print(f"site: {pages_base}/")
+            print(f"map: {pages_base}/map/map.html")
+        state = pages_api(args.repo) or {}
+        print(f"pages: status {state.get('status')}, "
+              f"cname {state.get('cname')!r}, "
+              f"cert {cert_state(state)!r}, "
+              f"protected {state.get('protected_domain_state')!r}, "
+              f"https_enforced {state.get('https_enforced')}")
+        if args.domain and args.wait_https is False:
+            print("HTTPS enforcement left off (--no-wait-https): manual "
+                  "step — repo Pages settings → Enforce HTTPS once the "
+                  "certificate shows available")
     else:
         sha = single_commit(mirror_dir, message)
         print(f"LOCAL verification only — nothing pushed ({file_count} files, "

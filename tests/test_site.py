@@ -35,7 +35,9 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import psp_public
 import publish
 
-BANNER_TEXT = "Tell our leaders to stop tank farms from dumping hazardous pollutants in our neighborhoods."
+# Ledger row 5 banner, single-sourced from tools/psp_public.py so the
+# tests and publish.py's domain check pin the same string.
+BANNER_TEXT = psp_public.BANNER_TEXT
 EMBED_URL = "map/embed.html"
 
 # Ledger row 1: private map-site surface must never leak onto the public site.
@@ -648,3 +650,184 @@ def test_publish_stages_cname_only_when_domain_given(docs, tmp_path):
     # The staging hostname must survive the publication scan: no private
     # marker, no draft marker, no event marker.
     assert psp_public.scan_tree(str(staged)) == []
+
+# ---- publish-tool hardening from domain-flip-readiness.md gaps 2-4: the ----
+# ---- post-push verification must not follow redirects outside the      ----
+# ---- allowed hosts, must wait for the TLS certificate and enforce      ----
+# ---- HTTPS, and a default (no --domain) publish must never clear a     ----
+# ---- custom domain the target repo already carries.                    ----
+
+
+def _fake_urlopen(final_url, status=200):
+    """Stub for publish.urllib.request.urlopen: 200 at `final_url`."""
+
+    class FakeResp:
+        def __init__(self):
+            self.status = status
+
+        def read(self):
+            return b""
+
+        def geturl(self):
+            return final_url
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    return lambda url, timeout=20: FakeResp()
+
+
+def test_banner_text_single_source():
+    assert BANNER_TEXT == ("Tell our leaders to stop tank farms from dumping "
+                           "hazardous pollutants in our neighborhoods.")
+
+
+def test_publish_wait_fails_loud_when_redirect_leaves_github_io(monkeypatch):
+    monkeypatch.setattr(
+        publish.urllib.request, "urlopen",
+        _fake_urlopen("https://www.protectsouthportland.com/map/embed.html"))
+    with pytest.raises(SystemExit, match="custom DNS already live"):
+        publish.wait_for_pages(
+            ["https://cristoslc.github.io/protect-south-portland-published/"
+             "map/embed.html"], minutes=0.02)
+
+
+def test_publish_wait_accepts_the_explicit_custom_domain(monkeypatch):
+    monkeypatch.setattr(
+        publish.urllib.request, "urlopen",
+        _fake_urlopen(f"https://{STAGING_PUBLISH_DOMAIN}/"))
+    monkeypatch.setattr(publish.time, "sleep", lambda s: None)
+    publish.wait_for_pages([f"https://{STAGING_PUBLISH_DOMAIN}/"],
+                           minutes=0.02,
+                           allowed_domains=(STAGING_PUBLISH_DOMAIN,))
+
+
+def test_publish_wait_timeout_names_the_domain_provisioning_hint(monkeypatch):
+    def broken(url, timeout=20):
+        raise OSError("connection failed")
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", broken)
+    monkeypatch.setattr(publish.time, "sleep", lambda s: None)
+    with pytest.raises(SystemExit, match="certificate"):
+        publish.wait_for_pages([f"https://{STAGING_PUBLISH_DOMAIN}/"],
+                               minutes=0.01,
+                               allowed_domains=(STAGING_PUBLISH_DOMAIN,))
+
+
+def test_publish_wait_timeout_github_io_default_message(monkeypatch):
+    def broken(url, timeout=20):
+        raise OSError("connection failed")
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", broken)
+    monkeypatch.setattr(publish.time, "sleep", lambda s: None)
+    with pytest.raises(SystemExit, match="Pages not serving after the wait"):
+        publish.wait_for_pages(
+            ["https://cristoslc.github.io/protect-south-portland-published/"],
+            minutes=0.01)
+
+
+def test_publish_stickiness_guard_forbids_a_default_republish():
+    state = {"cname": STAGING_PUBLISH_DOMAIN,
+             "protected_domain_state": "verified"}
+    violation = publish.domain_stickiness_violation(state, None, False)
+    assert violation and STAGING_PUBLISH_DOMAIN in violation
+    assert "--domain" in violation and "--allow-domain-drop" in violation
+    assert publish.domain_stickiness_violation({}, None, False) is None
+    assert publish.domain_stickiness_violation(
+        {"protected_domain_state": "unverified"}, None, False) is None
+
+
+def test_publish_stickiness_guard_escape_hatches():
+    state = {"cname": STAGING_PUBLISH_DOMAIN}
+    assert publish.domain_stickiness_violation(
+        state, STAGING_PUBLISH_DOMAIN, False) is None
+    assert publish.domain_stickiness_violation(state, None, True) is None
+    conflict = publish.domain_stickiness_violation(
+        state, STAGING_PUBLISH_DOMAIN, True)
+    assert conflict and "conflicts" in conflict
+
+
+def test_publish_check_domain_stickiness_aborts(monkeypatch):
+    monkeypatch.setattr(
+        publish, "pages_api",
+        lambda repo: {"cname": STAGING_PUBLISH_DOMAIN})
+    with pytest.raises(SystemExit, match="--allow-domain-drop"):
+        publish.check_domain_stickiness(
+            "cristoslc/protect-south-portland-staging", None, False)
+    with pytest.raises(SystemExit, match="conflicts"):
+        publish.check_domain_stickiness(
+            "cristoslc/protect-south-portland-staging",
+            STAGING_PUBLISH_DOMAIN, True)
+    monkeypatch.setattr(publish, "pages_api", lambda repo: None)
+    publish.check_domain_stickiness(
+        "cristoslc/protect-south-portland-staging", None, False)
+
+
+def test_publish_index_matches_built(tmp_path):
+    index = tmp_path / "index.html"
+    index.write_text(f"<p>{BANNER_TEXT}</p>", encoding="utf-8")
+    assert publish.index_matches_built(f"<p>{BANNER_TEXT}</p>", str(index))
+    assert publish.index_matches_built(f"prose {BANNER_TEXT} prose", str(index))
+    # The banner fallback: the served page carries the banner even where the
+    # local file read differs.
+    index.write_text("<p>unrelated</p>", encoding="utf-8")
+    assert publish.index_matches_built(BANNER_TEXT, str(index))
+    # Neither branch: a text with no banner, against a differing local file.
+    assert not publish.index_matches_built("<p>different text only</p>",
+                                           str(index))
+    assert not publish.index_matches_built(BANNER_TEXT, str(index) + "-gone")
+
+
+def test_publish_enforce_https_polls_then_enforces(monkeypatch):
+    sequence = iter([
+        {"https_enforced": False, "https_certificate":
+            {"state": "pending_issuance"}},
+        {"https_enforced": False, "https_certificate": {"state": "approved"}},
+        {"https_enforced": False, "https_certificate": {"state": "approved"}},
+        {"https_enforced": True},
+    ])
+    monkeypatch.setattr(publish, "pages_api", lambda repo: next(sequence))
+    puts = []
+    monkeypatch.setattr(publish, "put_https_enforced",
+                        lambda repo: puts.append(repo))
+    monkeypatch.setattr(publish.time, "sleep", lambda s: None)
+    assert publish.enforce_https("cristoslc/protect-south-portland-staging",
+                                 clock=lambda: 0)["https_enforced"] is True
+    assert puts == ["cristoslc/protect-south-portland-staging"]
+
+
+def test_publish_enforce_https_timeout_names_the_manual_step(monkeypatch):
+    monkeypatch.setattr(
+        publish, "pages_api",
+        lambda repo: {"https_enforced": False, "https_certificate": None})
+    monkeypatch.setattr(publish, "put_https_enforced", lambda repo: None)
+    ticks = iter(range(0, 1000, 30))
+    with pytest.raises(SystemExit, match="Enforce HTTPS"):
+        publish.enforce_https("cristoslc/protect-south-portland-staging",
+                              minutes=1,
+                              clock=lambda: next(ticks), pause=lambda s: None)
+
+
+def test_publish_wait_flags_reject_a_domainless_run():
+    with pytest.raises(SystemExit, match="custom-domain"):
+        publish.assert_flag_agreement(None, True)
+    with pytest.raises(SystemExit, match="custom-domain"):
+        publish.assert_flag_agreement(None, False)
+    publish.assert_flag_agreement(STAGING_PUBLISH_DOMAIN, None)
+    publish.assert_flag_agreement(STAGING_PUBLISH_DOMAIN, True)
+
+
+def test_publish_parser_hardening_flags():
+    parser = publish.build_parser()
+    args = parser.parse_args(["--gate-report", "g"])
+    assert args.allow_domain_drop is False
+    assert args.wait_https is None
+    args = parser.parse_args(
+        ["--gate-report", "g", "--allow-domain-drop", "--wait-https"])
+    assert args.allow_domain_drop is True
+    assert args.wait_https is True
+    args = parser.parse_args(["--gate-report", "g", "--no-wait-https"])
+    assert args.wait_https is False

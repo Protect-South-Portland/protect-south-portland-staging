@@ -79,7 +79,7 @@ NAV_BODY = """
 # comment deliberately so the internal note never reaches the served HTML.
 FOOTER_BODY = """
 <div class="dated-strip" role="note">
-  <p>Next: City Council workshop - Tuesday, Oct. 27, 6:30 p.m., South Portland High School. <a href="act-now.html">Act now.</a></p>
+  <p>Next: City Council workshop - Tuesday, Oct. 27, 6 p.m., South Portland High School. <a href="act-now.html">Act now.</a></p>
 </div>
 <footer class="footer">
   <div class="wrap footer__grid">

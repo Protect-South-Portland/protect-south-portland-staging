@@ -64,6 +64,7 @@ EXTERNAL_ALLOWLIST = (
     "mainelegislature.org",
     "legiscan.com",
     "bostonglobe.com",
+    "dropbox.com",
     "nytimes.com",
     "scientificamerican.com",
     "beyondpesticides.org",
@@ -368,6 +369,34 @@ def test_donate_page_has_one_paypal_path(docs):
     assert href.startswith("https://www.paypal.com/donate"), href
     assert "business=protectsouthportland%40gmail.com" in href, href
     assert "currency_code=USD" in href, href
+
+
+def test_sprague_complaint_asset_mirrored(docs):
+    """RED-1 (wix-vs-staging-comparison.md): the DOJ complaint document the
+    live Wix /global page links ("Read the complaint>>") is mirrored into
+    site/assets/files/ and anchored from the Sprague paragraph on
+    tank-farms.html, so it survives Wix going dark."""
+    tf = read(docs, "tank-farms.html")
+    assert "Read the complaint (PDF)" in tf, "anchor text missing"
+    hrefs = re.findall(r'href="(assets/files/[^"]*\.pdf)"', tf)
+    sprague = [h for h in hrefs if "sprague-doj-complaint" in h]
+    assert len(sprague) == 1, f"expected one Sprague complaint link, got {sprague}"
+    asset = os.path.join(docs, sprague[0])
+    assert os.path.exists(asset), "mirrored Sprague complaint is not reachable"
+    with open(asset, "rb") as f:
+        assert f.read(5) == b"%PDF-", "mirrored Sprague asset is not a PDF"
+    assert tf.index("notice of violation from the EPA on May 29, 2020") < tf.index("Read the complaint (PDF)")
+
+
+def test_about_links_the_award_video(docs):
+    """RED-2 (wix-vs-staging-comparison.md): the Local Hero award video has a
+    live public Dropbox copy; about.html links it instead of promising a
+    future copy. Interim wording - Mindy's final hosting decision may
+    rewrite it later."""
+    page = read(docs, "about.html")
+    assert "when a public copy is available" not in page, "false pending claim still present"
+    assert 'href="https://www.dropbox.com/s/6kizeqdtod6fr52/ME%20-%20Final.mp4?dl=0"' in page, "Dropbox copy link missing"
+    assert "Watch the award video" in page, "video link anchor text missing"
 
 
 def test_embed_url_is_the_public_embedding(docs):

@@ -25,6 +25,12 @@ Usage:
   python3 tools/publish.py --gate-report ... --mirror-dir /tmp/psp-mirror-check
       (local verification: same staging + scan + commit against a scratch
        git repo; never contacts GitHub)
+  python3 tools/publish.py --gate-report ... --repo <owner/name> \
+      --domain <hostname>
+      (same pipeline against another public repo — orphan commit, gate
+       report, marker scan, Pages enable with the custom domain; used for
+       the staging mirror rehearsed before the DNS flip. Omitted flags keep
+       the production behavior frozen: the mirror repo, no staged CNAME)
 """
 import argparse
 import datetime
@@ -41,9 +47,30 @@ import psp_public
 
 ROOT = psp_public.SITE_REPO_ROOT
 MIRROR_REPO = "cristoslc/protect-south-portland-published"
-MIRROR_URL = f"https://github.com/{MIRROR_REPO}.git"
+MIRROR_PAGES_BASE = "https://cristoslc.github.io/protect-south-portland-published"
 MIRROR_DIR = os.path.join(os.path.dirname(ROOT), "protect-south-portland-published")
-MIRROR_PAGES_BASE = f"https://cristoslc.github.io/protect-south-portland-published"
+
+
+def repo_pages_base(repo):
+    """GitHub Pages URL root for a repo: https://{owner}.github.io/{name}."""
+    owner, _, name = repo.partition("/")
+    return f"https://{owner}.github.io/{name}"
+
+
+def repo_url(repo):
+    """HTTPS clone URL for a publishes-to repo."""
+    return f"https://github.com/{repo}.git"
+
+
+def default_mirror_dir(repo):
+    """Default checkout for a publish target: a sibling of the site repo.
+
+    The production mirror keeps its fixed path; any other --repo target
+    gets a sibling named after the repo.
+    """
+    if repo == MIRROR_REPO:
+        return MIRROR_DIR
+    return os.path.join(os.path.dirname(ROOT), repo.partition("/")[2])
 
 # Staged for the later DNS flip in the site repo; the mirror keeps its
 # default github.io URL until the operator moves the domain over.
@@ -134,9 +161,16 @@ def build_site():
             "site repo alone cannot publish the map.")
 
 
-def stage_publish_tree(staging):
-    """Copy docs/ minus the CNAME/.gitkeep, add the fixed README, scan."""
-    docs = os.path.join(ROOT, "docs")
+def stage_publish_tree(staging, cname=None, docs_dir=None):
+    """Copy docs/ minus the CNAME/.gitkeep, add the fixed README, scan.
+
+    With --domain the given hostname is staged as the tree's CNAME (the
+    site repo's own docs/CNAME — the production flip — stays excluded
+    unless the operator publishes with --domain that hostname).
+    docs_dir overrides the source build tree (tests use the built fixture;
+    production always leaves it None = the repo's docs/).
+    """
+    docs = docs_dir or os.path.join(ROOT, "docs")
     for entry in sorted(os.listdir(docs)):
         if entry in PUBLISH_EXCLUDES:
             continue
@@ -148,30 +182,32 @@ def stage_publish_tree(staging):
             shutil.copy2(src, dst)
     open(os.path.join(staging, "README.md"), "w", encoding="utf-8").write(MIRROR_README_TEXT)
     open(os.path.join(staging, ".nojekyll"), "w").write("")
+    if cname:
+        open(os.path.join(staging, "CNAME"), "w", encoding="utf-8").write(cname + "\n")
     psp_public.assert_clean(psp_public.scan_tree(staging), "staged publish tree")
     return sum(len(files) for _, _, files in os.walk(staging))
 
 
-def ensure_git_repo(mirror_dir, is_remote_target):
+def ensure_git_repo(mirror_dir, is_remote_target, repo):
     if os.path.isdir(os.path.join(mirror_dir, ".git")):
         origin = subprocess.run(
             ["git", "config", "--get", "remote.origin.url"],
             cwd=mirror_dir, capture_output=True, text=True)
         if is_remote_target:
-            if origin.returncode != 0 or MIRROR_REPO not in origin.stdout:
+            if origin.returncode != 0 or repo not in origin.stdout:
                 raise SystemExit(
                     f"{mirror_dir}: remote origin is {origin.stdout.strip()!r}, "
-                    f"expected the {MIRROR_REPO} clone")
+                    f"expected the {repo} clone")
         return
     if is_remote_target:
         view = subprocess.run(
-            ["gh", "repo", "view", MIRROR_REPO, "--json", "url"],
+            ["gh", "repo", "view", repo, "--json", "url"],
             capture_output=True, text=True)
         if view.returncode != 0:
-            run(["gh", "repo", "create", MIRROR_REPO, "--public", "--disable-wiki",
+            run(["gh", "repo", "create", repo, "--public", "--disable-wiki",
                  "--description",
                  "Protect South Portland - published campaign site and map (snapshot)"])
-        run(["git", "clone", MIRROR_URL, mirror_dir],
+        run(["git", "clone", repo_url(repo), mirror_dir],
             cwd=os.path.dirname(mirror_dir))
     else:
         run(["git", "init", "-b", "main", mirror_dir])
@@ -239,9 +275,9 @@ def single_commit(mirror_dir, message):
     return run(["git", "rev-parse", "--short", "HEAD"], cwd=mirror_dir)
 
 
-def ensure_pages_enabled():
+def ensure_pages_enabled(repo, cname=None):
     proc = subprocess.run(
-        ["gh", "api", "-X", "POST", f"repos/{MIRROR_REPO}/pages",
+        ["gh", "api", "-X", "POST", f"repos/{repo}/pages",
          "-f", "build_type=legacy",
          "-f", "source[branch]=main",
          "-f", "source[path]=/"],
@@ -249,6 +285,24 @@ def ensure_pages_enabled():
     already = "409" in proc.stderr or "already" in proc.stderr.lower()
     if proc.returncode != 0 and not already:
         raise SystemExit(f"enabling Pages failed:\n{proc.stderr}")
+    if cname:
+        proc = subprocess.run(
+            ["gh", "api", "-X", "PUT", f"repos/{repo}/pages",
+             "-f", f"cname={cname}"],
+            capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise SystemExit(
+                f"setting the Pages custom domain {cname} failed:\n{proc.stderr}")
+        check = subprocess.run(
+            ["gh", "api", f"repos/{repo}/pages"],
+            capture_output=True, text=True)
+        if check.returncode != 0:
+            raise SystemExit(f"reading back Pages settings failed:\n{check.stderr}")
+        state = json.loads(check.stdout)
+        if state.get("cname") != cname:
+            raise SystemExit(
+                f"Pages custom domain is {state.get('cname')!r}, "
+                f"expected {cname!r}")
 
 
 def wait_for_pages(urls, minutes=8):
@@ -269,7 +323,7 @@ def wait_for_pages(urls, minutes=8):
         raise SystemExit("Pages not serving after the wait: " + ", ".join(pending))
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         description="Publish the public mirror (gate report mandatory).")
     parser.add_argument("--gate-report", required=True,
@@ -280,12 +334,27 @@ def main():
     parser.add_argument("--note", default="",
                         help="extra commit-message body line recording what "
                              "this publish cycle changed")
-    parser.add_argument("--mirror-dir", default=MIRROR_DIR,
-                        help="mirror checkout (default: the published repo "
-                             "clone; any other path = local verification only)")
-    args = parser.parse_args()
+    parser.add_argument("--repo", default=MIRROR_REPO,
+                        help="push target as owner/name (default: the production "
+                             "mirror; any other public repo gets the identical "
+                             "pipeline, e.g. the staging rehearsal)")
+    parser.add_argument("--domain", default=None,
+                        help="custom hostname: staged as the tree's CNAME and set "
+                             "as the target repo's Pages custom domain (default: "
+                             "none — the mirror keeps its github.io URL until the "
+                             "operator flips DNS)")
+    parser.add_argument("--mirror-dir", default=None,
+                        help="target checkout (default: the clone of --repo; "
+                             "any other path = local verification only)")
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
+    mirror_dir = args.mirror_dir or default_mirror_dir(args.repo)
     is_remote_target = os.path.abspath(
-        args.mirror_dir) == os.path.abspath(MIRROR_DIR)
+        mirror_dir) == os.path.abspath(default_mirror_dir(args.repo))
+    pages_base = repo_pages_base(args.repo)
 
     review_model, per_page = load_gate_report(args.gate_report)
     require_clean_worktree()
@@ -293,11 +362,11 @@ def main():
 
     staging = tempfile.mkdtemp(prefix="psp-publish-")
     try:
-        file_count = stage_publish_tree(staging)
-        ensure_git_repo(args.mirror_dir, is_remote_target)
-        removed = sync_tree(staging, args.mirror_dir)
+        file_count = stage_publish_tree(staging, cname=args.domain)
+        ensure_git_repo(mirror_dir, is_remote_target, args.repo)
+        removed = sync_tree(staging, mirror_dir)
         psp_public.assert_clean(
-            psp_public.scan_tree(args.mirror_dir), "mirror worktree")
+            psp_public.scan_tree(mirror_dir), "mirror worktree")
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -313,20 +382,23 @@ def main():
         + (f"\n{args.note}" if args.note else ""))
 
     if is_remote_target:
-        sha = single_commit(args.mirror_dir, message)
-        run(["git", "push", "--force", "origin", "main"], cwd=args.mirror_dir)
-        ensure_pages_enabled()
-        wait_for_pages([MIRROR_PAGES_BASE + "/",
-                        MIRROR_PAGES_BASE + "/map/embed.html",
-                        MIRROR_PAGES_BASE + "/map/map.html"])
-        print(f"published commit {sha} ({file_count} files) to {MIRROR_REPO}")
-        print(f"site: {MIRROR_PAGES_BASE}/")
-        print(f"map: {MIRROR_PAGES_BASE}/map/map.html")
+        sha = single_commit(mirror_dir, message)
+        run(["git", "push", "--force", "origin", "main"], cwd=mirror_dir)
+        ensure_pages_enabled(args.repo, cname=args.domain)
+        wait_for_pages([pages_base + "/",
+                        pages_base + "/map/embed.html",
+                        pages_base + "/map/map.html"])
+        print(f"published commit {sha} ({file_count} files) to {args.repo}")
+        if args.domain:
+            print(f"custom domain: {args.domain} "
+                  "(staged as CNAME and set in Pages settings)")
+        print(f"site: {pages_base}/")
+        print(f"map: {pages_base}/map/map.html")
     else:
-        sha = single_commit(args.mirror_dir, message)
+        sha = single_commit(mirror_dir, message)
         print(f"LOCAL verification only — nothing pushed ({file_count} files, "
               f"removed stale: {sorted(removed) or 'none'})")
-        print(f"commit {sha} in {args.mirror_dir}")
+        print(f"commit {sha} in {mirror_dir}")
         print(f"gate: {review_model}, pages: {per_page}")
         print(f"snapshot: {snapshot}")
 

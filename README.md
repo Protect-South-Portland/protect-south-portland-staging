@@ -70,6 +70,18 @@ python3 tools/publish.py --gate-report ../gate-reports/<date>.json
 
 Details (staging, marker scans, single-commit force-push, DNS-flip step): AGENTS.md, "Publishing to the public mirror".
 
+### Staging rehearsal (`--repo` / `--domain`)
+
+The identical pipeline can target a different public repo — used to rehearse the DNS flip on a staging mirror before touching production:
+
+```sh
+python3 tools/publish.py --gate-report ../gate-reports/<date>.json \
+    --repo cristoslc/protect-south-portland-staging \
+    --domain staging-b1fa9840.protectsouthportland.org
+```
+
+`--repo` swaps the push target (owner/name; default stays the production mirror), and `--domain` stages the hostname as the tree's `CNAME` and sets it as that repo's Pages custom domain. Omitted flags freeze production behavior: the production mirror repo, no staged CNAME (the site repo's `docs/CNAME` for the real flip stays out of the tree). A `--mirror-dir` that is not the target's default checkout remains local verification only.
+
 ## Repo structure
 
 ```

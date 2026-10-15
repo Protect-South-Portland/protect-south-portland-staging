@@ -33,6 +33,7 @@ BUILD = os.path.join(ROOT, "tools", "build.py")
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import psp_public
+import publish
 
 BANNER_TEXT = "Tell our leaders to stop tank farms from dumping hazardous pollutants in our neighborhoods."
 EMBED_URL = "map/embed.html"
@@ -565,3 +566,56 @@ def test_public_scan_skips_binary_formats(tmp_path):
     bogus = tmp_path / "looks-private.pdf"
     bogus.write_bytes(b"%PDF-1.4 fake payload south-portland-tank-farms")
     assert psp_public.scan_tree(tmp_path) == []
+
+
+# ---- tools/publish.py --repo/--domain: the staging-mirror rehearsal    ----
+# ---- flags. Strictly opt-in: with nothing passed, the production       ----
+# ---- behavior (mirror repo, no staged CNAME) stays frozen.             ----
+
+STAGING_PUBLISH_REPO = "cristoslc/protect-south-portland-staging"
+STAGING_PUBLISH_DOMAIN = "staging-b1fa9840.protectsouthportland.org"
+
+
+def test_publish_defaults_keep_production_target():
+    args = publish.build_parser().parse_args(["--gate-report", "g.json"])
+    assert args.repo == publish.MIRROR_REPO
+    assert args.domain is None
+
+
+def test_publish_flags_select_staging_repo_and_domain():
+    args = publish.build_parser().parse_args([
+        "--gate-report", "g.json",
+        "--repo", STAGING_PUBLISH_REPO, "--domain", STAGING_PUBLISH_DOMAIN])
+    assert args.repo == STAGING_PUBLISH_REPO
+    assert args.domain == STAGING_PUBLISH_DOMAIN
+
+
+def test_publish_pages_base_and_default_dir_follow_repo():
+    assert publish.repo_pages_base(publish.MIRROR_REPO) == \
+        "https://cristoslc.github.io/protect-south-portland-published"
+    assert publish.repo_pages_base(STAGING_PUBLISH_REPO) == \
+        "https://cristoslc.github.io/protect-south-portland-staging"
+    assert publish.default_mirror_dir(publish.MIRROR_REPO) == publish.MIRROR_DIR
+    assert publish.default_mirror_dir(STAGING_PUBLISH_REPO) == os.path.join(
+        os.path.dirname(psp_public.SITE_REPO_ROOT),
+        "protect-south-portland-staging")
+
+
+def test_publish_stages_cname_only_when_domain_given(docs, tmp_path):
+    """No --domain: the tree carries no CNAME (today's mirror behavior).
+    With --domain: exactly that hostname is staged and passes the scan."""
+    # Production hands stage_publish_tree an mkdtemp'd (existing) dir.
+    default_stage = tmp_path / "default"
+    default_stage.mkdir()
+    publish.stage_publish_tree(str(default_stage), docs_dir=str(docs))
+    assert not os.path.exists(str(default_stage / "CNAME"))
+
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    publish.stage_publish_tree(str(staged), cname=STAGING_PUBLISH_DOMAIN,
+                               docs_dir=str(docs))
+    staged_cname = open(str(staged / "CNAME"), encoding="utf-8").read().strip()
+    assert staged_cname == STAGING_PUBLISH_DOMAIN, staged_cname
+    # The staging hostname must survive the publication scan: no private
+    # marker, no draft marker, no event marker.
+    assert psp_public.scan_tree(str(staged)) == []

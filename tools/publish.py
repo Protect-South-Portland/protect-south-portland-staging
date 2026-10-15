@@ -21,19 +21,31 @@ anything is pushed; missing or failing pages abort loudly and the copy
 escalates to the operator instead of being published.
 
 Usage:
-  python3 tools/publish.py --gate-report ../gate-reports/2026-10-13.json
+  python3 tools/publish.py --gate-report ../gate-reports/<date>.json
+      (staging leg — the DEFAULT target since the 2026-10-14 staging-first
+       directive: pushes the rebuilt tree to the staging mirror, keeping
+       and re-verifying its existing custom domain)
   python3 tools/publish.py --gate-report ... --mirror-dir /tmp/psp-mirror-check
       (local verification: same staging + scan + commit against a scratch
        git repo; never contacts GitHub)
+  python3 tools/publish.py --gate-report ... \
+      --repo cristoslc/protect-south-portland-published
+      (production leg — explicit only; per AGENTS.md "Deployment policy"
+       it runs only after the staging leg has operator sign-off)
   python3 tools/publish.py --gate-report ... --repo <owner/name> \
       --domain <hostname>
       (same pipeline against another public repo — orphan commit, gate
        report, marker scan, Pages enable with the custom domain; then
        https://<hostname> is verified over a hostname-valid TLS
        connection and https_enforced is set once the certificate is
-       approved (--no-wait-https skips the wait); a target repo that
-       already carries a Pages custom domain is refused without --domain
-       or an explicit --allow-domain-drop)
+       approved (--no-wait-https skips the wait))
+
+A publish never silently clears a custom domain its target repo already
+carries: without --domain the existing hostname is auto-kept (re-staged
+as the tree's CNAME and re-verified), --domain replaces it, and
+--allow-domain-drop clears it explicitly. Legacy "branch" builds read
+the domain from the CNAME file, so a CNAME-less staged tree would drop
+it on the next Pages build.
 """
 import argparse
 import datetime
@@ -51,9 +63,13 @@ import urllib.request
 import psp_public
 
 ROOT = psp_public.SITE_REPO_ROOT
-MIRROR_REPO = "cristoslc/protect-south-portland-published"
-MIRROR_PAGES_BASE = "https://cristoslc.github.io/protect-south-portland-published"
-MIRROR_DIR = os.path.join(os.path.dirname(ROOT), "protect-south-portland-published")
+# Publish targets (operator directive 2026-10-14, staging first): the
+# DEFAULT target is the staging mirror; the production mirror is reached
+# ONLY with an explicit --repo, and that leg runs only after staging
+# sign-off (../docs/runbooks/psp-staging-first-deployment.md).
+STAGING_REPO = "cristoslc/protect-south-portland-staging"
+PROD_REPO = "cristoslc/protect-south-portland-published"
+DEFAULT_REPO = STAGING_REPO
 
 
 def repo_pages_base(repo):
@@ -68,13 +84,9 @@ def repo_url(repo):
 
 
 def default_mirror_dir(repo):
-    """Default checkout for a publish target: a sibling of the site repo.
-
-    The production mirror keeps its fixed path; any other --repo target
-    gets a sibling named after the repo.
-    """
-    if repo == MIRROR_REPO:
-        return MIRROR_DIR
+    """Default checkout for a publish target: a sibling of the site repo
+    named after the repo (protect-south-portland-published ->
+    ../protect-south-portland-published)."""
     return os.path.join(os.path.dirname(ROOT), repo.partition("/")[2])
 
 # Staged for the later DNS flip in the site repo; the mirror keeps its
@@ -373,32 +385,56 @@ def cert_state(pages_state):
     return cert
 
 
-def domain_stickiness_violation(state, requested_cname, allow_drop):
-    """Abort reason when a CNAME-less tree would clear the target repo's
-    custom domain (legacy "branch" builds read the domain from the
-    CNAME file), or None when the publish may proceed."""
+def resolve_publish_domain(state, requested_cname, allow_drop):
+    """The publish's effective custom domain, from the target repo's live
+    Pages state (None when Pages is not enabled), the explicit --domain
+    request, and --allow-domain-drop.
+
+    Staging-first hardening (2026-10-14): a publish never silently clears
+    or rewrites a custom domain the target already carries. --domain wins
+    and is staged; without --domain the existing hostname is auto-kept
+    (the staged tree re-carries its CNAME and the publish re-verifies that
+    hostname); --allow-domain-drop alone explicitly clears the domain.
+    Legacy "branch" builds read the domain from the CNAME file, so a
+    CNAME-less staged tree would drop it on the next Pages build. The
+    only hard refusals are the flag-combination conflict and a verified
+    custom domain whose cname value cannot be read.
+
+    Returns (effective_cname, violation_reason_or_None).
+    """
     current = (state or {}).get("cname")
     protected = (state or {}).get("protected_domain_state") == "verified"
-    if not current and not protected:
-        return None
-    if allow_drop and requested_cname:
-        return "--allow-domain-drop conflicts with --domain: pass one or " \
-               "the other, never both"
-    if allow_drop or requested_cname:
-        return None
-    return (
-        f"this repo already carries the Pages custom domain {current!r}; a "
-        "tree staged without --domain would clear it on the next Pages "
-        "build. Re-run with --domain " + (current or "<current domain>") +
-        " to keep publishing against it, or pass --allow-domain-drop "
-        "explicitly to drop the custom domain.")
+    if requested_cname and allow_drop:
+        return None, ("--allow-domain-drop conflicts with --domain: pass "
+                      "one or the other, never both")
+    if current:
+        if allow_drop:
+            return None, None
+        return (requested_cname or current), None
+    if protected and not requested_cname and not allow_drop:
+        return None, (
+            "this repo's Pages state shows a verified custom domain but "
+            "no cname value to keep; a tree staged without --domain would "
+            "risk clearing it on the next Pages build. Re-run with "
+            "--domain <hostname> to keep publishing against it, or pass "
+            "--allow-domain-drop explicitly to drop the custom domain.")
+    return requested_cname, None
+
+
+def domain_stickiness_violation(state, requested_cname, allow_drop):
+    """Abort reason, if any, for these flags against this Pages state;
+    resolve_publish_domain carries the effective domain."""
+    return resolve_publish_domain(state, requested_cname, allow_drop)[1]
 
 
 def check_domain_stickiness(repo, requested_cname, allow_drop):
-    violation = domain_stickiness_violation(
+    """Pages state + flags -> the effective custom domain for a remote
+    target, failing loud on a violation."""
+    cname, violation = resolve_publish_domain(
         pages_api(repo), requested_cname, allow_drop)
     if violation:
         raise SystemExit(violation)
+    return cname
 
 
 def tls_cert_subject(host, timeout=20):
@@ -492,20 +528,20 @@ def build_parser():
     parser.add_argument("--note", default="",
                         help="extra commit-message body line recording what "
                              "this publish cycle changed")
-    parser.add_argument("--repo", default=MIRROR_REPO,
-                        help="push target as owner/name (default: the production "
-                             "mirror; any other public repo gets the identical "
-                             "pipeline, e.g. the staging rehearsal)")
+    parser.add_argument("--repo", default=DEFAULT_REPO,
+                        help="push target as owner/name (default: the staging "
+                             "mirror per the 2026-10-14 staging-first directive; "
+                             "production requires the explicit --repo "
+                             f"{PROD_REPO} and runs only after staging sign-off)")
     parser.add_argument("--domain", default=None,
                         help="custom hostname: staged as the tree's CNAME and set "
                              "as the target repo's Pages custom domain (default: "
-                             "none — the mirror keeps its github.io URL until the "
-                             "operator flips DNS)")
+                             "auto-keep — a target that already carries a custom "
+                             "domain keeps it, one without keeps its github.io URL)")
     parser.add_argument("--allow-domain-drop", action="store_true",
-                        help="explicit override letting a publish proceed without "
-                             "--domain even though the target repo carries a Pages "
-                             "custom domain (which the staged CNAME-less tree then "
-                             "clears on the next build)")
+                        help="explicit override that clears the target repo's "
+                             "Pages custom domain: the staged CNAME-less tree "
+                             "drops it on the next Pages build")
     wait = parser.add_mutually_exclusive_group()
     wait.add_argument("--wait-https", dest="wait_https",
                       action="store_true", default=None,
@@ -526,19 +562,22 @@ def main():
     is_remote_target = os.path.abspath(
         mirror_dir) == os.path.abspath(default_mirror_dir(args.repo))
     pages_base = repo_pages_base(args.repo)
-    assert_flag_agreement(args.domain, args.wait_https)
 
     review_model, per_page = load_gate_report(args.gate_report)
     require_clean_worktree()
+    domain = args.domain
     if is_remote_target:
-        # Before anything is pushed or built: a default publish must not
-        # silently clear a custom domain the target repo already carries.
-        check_domain_stickiness(args.repo, args.domain, args.allow_domain_drop)
+        # Before anything is pushed or built: resolve the custom domain —
+        # explicit --domain, or auto-keep of what the target already
+        # carries — so a publish can never silently clear it.
+        domain = check_domain_stickiness(
+            args.repo, args.domain, args.allow_domain_drop)
+    assert_flag_agreement(domain, args.wait_https)
     build_site()
 
     staging = tempfile.mkdtemp(prefix="psp-publish-")
     try:
-        file_count = stage_publish_tree(staging, cname=args.domain)
+        file_count = stage_publish_tree(staging, cname=domain)
         ensure_git_repo(mirror_dir, is_remote_target, args.repo)
         removed = sync_tree(staging, mirror_dir)
         psp_public.assert_clean(
@@ -560,16 +599,16 @@ def main():
     if is_remote_target:
         sha = single_commit(mirror_dir, message)
         run(["git", "push", "--force", "origin", "main"], cwd=mirror_dir)
-        ensure_pages_enabled(args.repo, cname=args.domain)
-        if args.domain:
+        ensure_pages_enabled(args.repo, cname=domain)
+        if domain:
             cert_note = verify_custom_domain(
-                args.domain, os.path.join(ROOT, "docs", "index.html"))
+                domain, os.path.join(ROOT, "docs", "index.html"))
             wait_https = args.wait_https if args.wait_https is not None else True
             if wait_https:
                 final_state = enforce_https(args.repo)
             print(f"published commit {sha} ({file_count} files) to {args.repo}")
-            print(f"site: https://{args.domain}/")
-            print(f"map: https://{args.domain}/map/map.html")
+            print(f"site: https://{domain}/")
+            print(f"map: https://{domain}/map/map.html")
             print(f"tls: {cert_note}")
             print("index: the served index matches the built index "
                   "(or carries the banner line)")
@@ -589,7 +628,7 @@ def main():
               f"cert {cert_state(state)!r}, "
               f"protected {state.get('protected_domain_state')!r}, "
               f"https_enforced {state.get('https_enforced')}")
-        if args.domain and args.wait_https is False:
+        if domain and args.wait_https is False:
             print("HTTPS enforcement left off (--no-wait-https): manual "
                   "step — repo Pages settings → Enforce HTTPS once the "
                   "certificate shows available")

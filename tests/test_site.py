@@ -639,18 +639,25 @@ def test_public_scan_skips_binary_formats(tmp_path):
     assert psp_public.scan_tree(tmp_path) == []
 
 
-# ---- tools/publish.py --repo/--domain: the staging-mirror rehearsal    ----
-# ---- flags. Strictly opt-in: with nothing passed, the production       ----
-# ---- behavior (mirror repo, no staged CNAME) stays frozen.             ----
+# ---- tools/publish.py --repo/--domain after the 2026-10-14            ----
+# ---- staging-first hardening: a bare run targets the staging mirror,  ----
+# ---- production is reachable ONLY through an explicit --repo, and a   ----
+# ---- publish auto-keeps (never silently clears) a custom domain the   ----
+# ---- target already carries.                                          ----
 
 STAGING_PUBLISH_REPO = "cristoslc/protect-south-portland-staging"
 STAGING_PUBLISH_DOMAIN = "staging-b1fa9840.protectsouthportland.org"
 
 
-def test_publish_defaults_keep_production_target():
+def test_publish_defaults_stay_on_staging():
+    """Operator directive 2026-10-14: a bare publish targets the staging
+    mirror; production is reachable ONLY through an explicit --repo."""
     args = publish.build_parser().parse_args(["--gate-report", "g.json"])
-    assert args.repo == publish.MIRROR_REPO
+    assert args.repo == publish.DEFAULT_REPO == publish.STAGING_REPO
     assert args.domain is None
+    explicit = publish.build_parser().parse_args(
+        ["--gate-report", "g.json", "--repo", publish.PROD_REPO])
+    assert explicit.repo == publish.PROD_REPO
 
 
 def test_publish_flags_select_staging_repo_and_domain():
@@ -662,11 +669,13 @@ def test_publish_flags_select_staging_repo_and_domain():
 
 
 def test_publish_pages_base_and_default_dir_follow_repo():
-    assert publish.repo_pages_base(publish.MIRROR_REPO) == \
+    assert publish.repo_pages_base(publish.PROD_REPO) == \
         "https://cristoslc.github.io/protect-south-portland-published"
     assert publish.repo_pages_base(STAGING_PUBLISH_REPO) == \
         "https://cristoslc.github.io/protect-south-portland-staging"
-    assert publish.default_mirror_dir(publish.MIRROR_REPO) == publish.MIRROR_DIR
+    assert publish.default_mirror_dir(publish.PROD_REPO) == os.path.join(
+        os.path.dirname(psp_public.SITE_REPO_ROOT),
+        "protect-south-portland-published")
     assert publish.default_mirror_dir(STAGING_PUBLISH_REPO) == os.path.join(
         os.path.dirname(psp_public.SITE_REPO_ROOT),
         "protect-south-portland-staging")
@@ -769,15 +778,25 @@ def test_publish_wait_timeout_github_io_default_message(monkeypatch):
             minutes=0.01)
 
 
-def test_publish_stickiness_guard_forbids_a_default_republish():
+def test_publish_stickiness_default_keeps_the_existing_domain():
+    """Auto-keep (2026-10-14): without --domain a publish re-stages and
+    re-verifies the custom domain the target already carries; it never
+    silently drops one. An empty/absent Pages state keeps nothing."""
     state = {"cname": STAGING_PUBLISH_DOMAIN,
              "protected_domain_state": "verified"}
-    violation = publish.domain_stickiness_violation(state, None, False)
-    assert violation and STAGING_PUBLISH_DOMAIN in violation
-    assert "--domain" in violation and "--allow-domain-drop" in violation
+    assert publish.domain_stickiness_violation(state, None, False) is None
     assert publish.domain_stickiness_violation({}, None, False) is None
     assert publish.domain_stickiness_violation(
         {"protected_domain_state": "unverified"}, None, False) is None
+    assert publish.resolve_publish_domain(state, None, False) == \
+        (STAGING_PUBLISH_DOMAIN, None)
+    assert publish.resolve_publish_domain({}, None, False) == (None, None)
+    # A verified custom domain with no cname value to read still refuses
+    # a domainless run: nothing to keep, staging blind would be worse.
+    no_cname = {"protected_domain_state": "verified"}
+    resolved = publish.resolve_publish_domain(no_cname, None, False)
+    assert resolved[0] is None and resolved[1]
+    assert "--domain" in resolved[1] and "--allow-domain-drop" in resolved[1]
 
 
 def test_publish_stickiness_guard_escape_hatches():
@@ -788,22 +807,29 @@ def test_publish_stickiness_guard_escape_hatches():
     conflict = publish.domain_stickiness_violation(
         state, STAGING_PUBLISH_DOMAIN, True)
     assert conflict and "conflicts" in conflict
+    # --domain replaces what the target carries; --allow-domain-drop
+    # clears it; the bare default keeps it (auto-keep).
+    assert publish.resolve_publish_domain(
+        state, "other.example.org", False) == ("other.example.org", None)
+    assert publish.resolve_publish_domain(state, None, True) == (None, None)
+    assert publish.resolve_publish_domain(state, None, False) == \
+        (STAGING_PUBLISH_DOMAIN, None)
 
 
-def test_publish_check_domain_stickiness_aborts(monkeypatch):
+def test_publish_check_domain_stickiness_resolves_and_aborts(monkeypatch):
     monkeypatch.setattr(
         publish, "pages_api",
         lambda repo: {"cname": STAGING_PUBLISH_DOMAIN})
-    with pytest.raises(SystemExit, match="--allow-domain-drop"):
-        publish.check_domain_stickiness(
-            "cristoslc/protect-south-portland-staging", None, False)
+    assert publish.check_domain_stickiness(
+        "cristoslc/protect-south-portland-staging", None, False) == \
+        STAGING_PUBLISH_DOMAIN
     with pytest.raises(SystemExit, match="conflicts"):
         publish.check_domain_stickiness(
             "cristoslc/protect-south-portland-staging",
             STAGING_PUBLISH_DOMAIN, True)
     monkeypatch.setattr(publish, "pages_api", lambda repo: None)
-    publish.check_domain_stickiness(
-        "cristoslc/protect-south-portland-staging", None, False)
+    assert publish.check_domain_stickiness(
+        "cristoslc/protect-south-portland-staging", None, False) is None
 
 
 def test_publish_index_matches_built(tmp_path):

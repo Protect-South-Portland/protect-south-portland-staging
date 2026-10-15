@@ -60,27 +60,26 @@ python3 -m pytest tests/          # test suite (pip install pytest)
 
 The test suite builds the site into a temp dir and enforces the ledger constraints above (banner verbatim + placement, map ordering, hero replacement, private-link ban, Oct 15 ban, homepage cut-down + past-work archive, dated footer strip, nav Act Now, Wix PDF mirroring, dead-domain ban, link integrity, external-domain allowlist) plus the release-gate rules in AGENTS.md (draft-artifact ban, self-hosted map).
 
-## Publish (public mirror)
+## Publish (staging first, prod second)
 
-The public site lives in a separate mirror repo — `cristoslc/protect-south-portland-published` — that carries exactly the campaign pages, local assets, and the standalone map (`map/embed.html`, `map/map.html`). Publish is one command, gate report in hand — and under the 2026-10-14 staging-first directive (AGENTS.md "Deployment policy") the flag-less form below is the prod leg of a cycle, run only after staging sign-off:
+Both public surfaces are separate mirror repos carrying exactly the campaign pages, local assets, and the standalone map (`map/embed.html`, `map/map.html`): staging at `cristoslc/protect-south-portland-staging`, production at `cristoslc/protect-south-portland-published`. Under the 2026-10-14 staging-first directive (AGENTS.md "Deployment policy") it is one command per leg, gate report in hand — the staging leg is the flag-less default:
 
 ```sh
 python3 tools/publish.py --gate-report ../gate-reports/<date>.json
 ```
 
-Details (staging, marker scans, single-commit force-push, DNS-flip step): AGENTS.md, "Publishing to the public mirror".
-
-### Staging leg — the mandatory first publish (`--repo` / `--domain`)
-
-The identical pipeline targets the staging mirror — the mandatory first leg of every publish cycle under the 2026-10-14 staging-first directive, and the rehearsal surface for the DNS flip:
+The production leg adds the explicit flag and runs only after the staging leg passes review:
 
 ```sh
 python3 tools/publish.py --gate-report ../gate-reports/<date>.json \
-    --repo cristoslc/protect-south-portland-staging \
-    --domain staging-b1fa9840.protectsouthportland.org
+    --repo cristoslc/protect-south-portland-published
 ```
 
-`--repo` swaps the push target (owner/name; default stays the production mirror), and `--domain` stages the hostname as the tree's `CNAME` and sets it as that repo's Pages custom domain. Omitted flags freeze production behavior: the production mirror repo, no staged CNAME (the site repo's `docs/CNAME` for the real flip stays out of the tree). A `--mirror-dir` that is not the target's default checkout remains local verification only.
+Details (marker scans, single-commit force-push, domain auto-keep, DNS-flip step): AGENTS.md, "Publishing to the public mirror". The full ladder with evidence paths: `../docs/runbooks/psp-staging-first-deployment.md`.
+
+### Other targets and custom domains (`--repo` / `--domain`)
+
+The identical pipeline can push to any other public repo: `--repo <owner/name>` swaps the push target, and `--domain <hostname>` stages that hostname as the tree's `CNAME` and sets it as the target repo's Pages custom domain (the real flip: `--repo cristoslc/protect-south-portland-published --domain protectsouthportland.org` at the operator's DNS cutover). Omitted flags are the staging leg: the staging mirror repo with its `staging-b1fa9840.protectsouthportland.org` domain auto-kept — no publish silently drops a custom domain its target carries, `--allow-domain-drop` clears one on purpose. The site repo's own `docs/CNAME` stays out of the tree unless `--domain` names that hostname. A `--mirror-dir` that is not the target's default checkout remains local verification only.
 
 Post-publish verification is hard against the two DNS-flip traps: the github.io check refuses to follow redirects off `*.github.io` (aborting with "custom DNS already live" instead of passing over a NetSol/Wix forward), and a `--domain` publish is only "done" when `https://<hostname>` serves the built index over a hostname-valid TLS certificate, after which the tool polls the Pages API and sets `https_enforced=true` (`--no-wait-https` leaves it manual; on timeout it fails loud with the Enforce HTTPS manual step). A publish with no `--domain` against a repo that already carries a custom domain is refused (`--allow-domain-drop` overrides explicitly) — a default run can never silently clear the CNAME.
 

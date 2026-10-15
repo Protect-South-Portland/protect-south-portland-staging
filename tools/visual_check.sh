@@ -238,7 +238,7 @@ for (const W of widths) {
 }
 const failures = Object.entries(out).filter(([, v]) =>
   v.brandInternal || v.nOver > 0 || v.nPairs > 0 || v.docOv || v.bodyOv);
-return {total: Object.keys(out).length, failures};
+return {total: Object.keys(out).length, verdicts: out, failures};
 EOFJS
 )"
 AUDIT_OUT="$OUT/audit.json"

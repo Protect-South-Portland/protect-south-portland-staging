@@ -10,7 +10,10 @@ Builds site/pages into a temp dir via tools/build.py and pins the hard rules:
   (the email-the-Council landing page).
 - Ledger row 1: no private links — research report, fact-check log, data files,
   GitHub repo — anywhere in the generated HTML.
-- Ledger row 9 (constraint): no mention of the Oct 15 community assembly, ever.
+- Ledger row 9 (constraint): no mention of the Oct 15 community assembly,
+  ever — REVERSED 2026-10-15 by ledger row 33 (operator/Mindy sanctioned the
+  meeting copy; the meeting is tonight): the ban is retired and the
+  Action-Oriented meeting bullet ships with the flyer link.
 - Site hygiene: internal links resolve, external links use an allowlist, every
   page has a title/description, and every image resolves locally with alt text.
 - Photography and graphics are copied from the live Wix site into
@@ -41,8 +44,11 @@ BANNER_TEXT = psp_public.BANNER_TEXT
 EMBED_URL = "map/embed.html"
 
 # Ledger row 1: private map-site surface must never leak onto the public site.
-# The marker sets live in tools/psp_public.py — shared with build.py and
-# tools/publish.py so every entry point enforces the same rules.
+# Ledger row 9's Oct-15 event-marker ban is reversed by row 33 (2026-10-15):
+# EVENT_MARKERS must be retired-empty in psp_public and only the sanctioned
+# meeting copy ships. The marker sets live in tools/psp_public.py — shared
+# with build.py and tools/publish.py so every entry point enforces the same
+# rules.
 PRIVATE_MARKERS = psp_public.PRIVATE_MARKERS
 FORBIDDEN_EVENT_MARKERS = psp_public.EVENT_MARKERS
 FORBIDDEN_DRAFT_MARKERS = psp_public.DRAFT_MARKERS
@@ -213,10 +219,31 @@ def test_row6_hero_replaced_and_act_now_landing(docs):
     assert "pressure the DEP to use the existing licensing process" in act
 
 
-def test_row9_no_oct15_assembly_anywhere(docs):
-    all_html = "\n".join(read(docs, n) for n in html_files(docs)).lower()
-    for marker in FORBIDDEN_EVENT_MARKERS:
-        assert marker.lower() not in all_html, marker
+def test_row33_oct15_meeting_copy_published(docs):
+    """Ledger row 33 (2026-10-15, Mindy-sanctioned, operator: publish today):
+    the Action-Oriented meeting bullet ships verbatim on the homepage callout
+    above the Oct 27 workshop bullet, with the QR-code link to the mirrored
+    flyer and the mailto anchor inside the verbatim parenthetical. Row 9's
+    scan ban on the event is retired — the marker list must be empty."""
+    idx = read(docs, "index.html")
+    bullet = ('<li><strong>Join neighbors on Thursday, Oct. 15 for a community meeting to '
+              "share ideas, concerns, and stories:</strong> 5:30 p.m. food and "
+              "community; 6-7 p.m. discussion. First Congregational Church "
+              "UCC, 301 Cottage Road. (RSVPs are great/not required \u2013 use "
+              '<a href="assets/files/tank-talk-flyer.pdf">the QR code</a> or '
+              '<a href="mailto:protectsouthportland@gmail.com">the email below</a>.) '
+              "Kids welcome.</li>")
+    assert bullet in idx, "sanctioned meeting bullet must be verbatim (en dash included; links are render-only)"
+    assert 'href="assets/files/tank-talk-flyer.pdf"' in idx, "the QR code must link the flyer"
+    assert 'href="mailto:protectsouthportland@gmail.com">the email below</a>' in idx
+    flyer = os.path.join(ROOT, "docs", "assets", "files", "tank-talk-flyer.pdf")
+    assert os.path.exists(flyer), "the Tank Talk flyer must be mirrored into the built tree"
+    # meeting bullet sits above the Oct 27 workshop bullet (operator placement)
+    callout_pos = idx.index("Now is the time to act")
+    assert idx.index("Join neighbors on Thursday, Oct. 15", callout_pos) < \
+        idx.index("Make plans to come to the City Council workshop", callout_pos)
+    # the scan ban is retired: no event markers remain to reject it
+    assert tuple(FORBIDDEN_EVENT_MARKERS) == ()
 
 
 def test_no_draft_language_anywhere(docs):
@@ -490,7 +517,7 @@ def test_embed_url_is_the_public_embedding(docs):
         assert 'src="map/embed.html"' in read(docs, name), name
 
 
-def test_row9_no_oct15_assembly_anywhere(docs):
+def test_docx_action_dates_are_on_the_homepage(docs):
     """The action dates from the docx must appear (sanity for row 5/6 copy)."""
     idx = read(docs, "index.html")
     assert "Oct. 27" in idx

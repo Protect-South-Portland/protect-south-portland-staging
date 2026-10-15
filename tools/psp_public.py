@@ -33,15 +33,12 @@ PRIVATE_MARKERS = (
 )
 
 # Ledger row 9 (constraint): the Oct 15 assembly is never on the public site.
-EVENT_MARKERS = (
-    "October 15",
-    "October 15th",
-    "Oct. 15",
-    "Oct 15",
-    "Oct.15",
-    "the 15th",
-    "community assembly",
-)
+# REVERSED 2026-10-15 by ledger row 33 (operator directive; Mindy-sanctioned
+# meeting copy ships today, meeting is tonight): the Oct-15 event-marker ban
+# is retired so the sanctioned Action-Oriented bullet passes the scan. The
+# private-surface markers above and the draft-artifact markers below are
+# unchanged.
+EVENT_MARKERS: tuple = ()
 
 # AGENTS.md release gate, rule 4: scan for the draft-artifact pattern class,
 # not a single exact string ("as now written", "most recent draft", TODO/FIXME

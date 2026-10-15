@@ -16,7 +16,7 @@ A prod push that skips staging (prod-direct) is reserved for extreme exceptional
 ## Hard constraints (tests enforce; never bypass)
 
 1. No links to the tank-farms research surfaces anywhere public: `report.html`, `factcheck.html`, `data.html`, `github.com/cristoslc/south-portland-tank-farms`, or their nav labels ("Research report", "Fact-check log", "Data files", "GitHub repo"). The map is self-hosted: index.html and tank-farms.html iframe the RELATIVE `map/embed.html` copy built into this repo's `docs/` (constraint text revised 2026-10-13 by orchestrator — the absolute github.io embed URL is superseded; the publish scanner also bans that host from the public tree).
-2. No mention of the October 15 community assembly (invitation-only; Facebook/poster channels only). Never add any event copy for it.
+2. No mention of the October 15 community assembly REVERSED 2026-10-15 by row 33 (Mindy-sanctioned meeting copy, operator publish-today directive; the meeting is tonight): the scanner's event-marker list is retired and the Action-Oriented meeting bullet ships with the flyer link. The original ban's shape is documented in the psp_public.py comment.
 3. Text copied verbatim from PSP-authored pages is fine. Photography and graphics from the live Wix site ARE copied locally into `site/assets/photos/` (operator directive, 2026-10-13) and served from this repo; never hotlink `static.wixstatic.com`. Keep press-photo credits (Portland Press Herald photographers) in captions.
 4. Change requests come from the ledger: `website-change-requests.md` in the PSP project workspace (this repo implements the open rows; row 4 and row 9 are constraints, not content).
 

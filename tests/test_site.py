@@ -189,14 +189,17 @@ def test_row3_map_top_center_text_below(docs):
     assert iframe_pos < idx.index("Now is the time to act")
 
 
-def test_row7_map_notice_is_public_wording(docs):
-    """Row 7 keeps a clearly marked graphic-swap notice, in public copy only:
-    no draft language (release-gate rule 4 bans Placeholder/pending labels)."""
+def test_row7_map_swap_stays_silent(docs):
+    """Operator directive 2026-10-14: the 'Final public map graphic: in
+    design' notice is killed. The interactive embed is the shipping feature;
+    when Nate's final graphic lands it slots in silently via the row-7
+    staged swap, so no page announces a future graphic."""
     for name in ("index.html", "tank-farms.html"):
         page = read(docs, name)
-        assert "Final public map graphic: in design" in page, name
-        assert "Explore the interactive map below" in page, name
-        assert "Placeholder" not in page and "pending" not in page, name
+        assert "Final public map graphic" not in page, name
+        assert "in design" not in page, name
+        assert "once design work wraps" not in page, name
+        assert "map-placeholder" not in page, name
 
 
 def test_row6_hero_replaced_and_act_now_landing(docs):
@@ -393,12 +396,22 @@ def test_sprague_complaint_asset_mirrored(docs):
 def test_about_links_the_award_video(docs):
     """RED-2 (wix-vs-staging-comparison.md): the Local Hero award video has a
     live public Dropbox copy; about.html links it instead of promising a
-    future copy. Interim wording - Mindy's final hosting decision may
-    rewrite it later."""
+    future copy. Operator addendum 2026-10-14: the interim parenthetical is
+    stripped too - shipped pages carry the link, not construction notes."""
     page = read(docs, "about.html")
     assert "when a public copy is available" not in page, "false pending claim still present"
     assert 'href="https://www.dropbox.com/s/6kizeqdtod6fr52/ME%20-%20Final.mp4?dl=0"' in page, "Dropbox copy link missing"
     assert "Watch the award video" in page, "video link anchor text missing"
+    assert "(temporary link" not in page, "interim parenthetical must be gone"
+
+
+def test_pages_carry_no_coming_soon_promises(docs):
+    """Ledger rows 28/29 (operator addendum): shipped pages do not narrate
+    coming mechanics. The subscribe-by-email and email-contact instructions
+    ARE the mechanism; the 'coming soon' promises go, sentence-delete only."""
+    for name in ("contact.html", "newsletter.html"):
+        page = read(docs, name)
+        assert "coming soon" not in page, name
 
 
 def test_homepage_who_we_are_block(docs):

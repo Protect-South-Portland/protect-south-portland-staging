@@ -58,11 +58,14 @@ EXCLUDED_START_PAGES = ("robots.txt", "oil-tank-emissions.html", "vocs.html")
 HOST_STAGING = "staging.protectsouthportland.org"
 
 # runtime probe: the gate overlay must be ABSENT (the cookie took) and the
-# page's main content present (a real render, not a broken document)
+# page's main content present (a real render, not a broken document). The
+# map pages (#map) have no <main> shell: the marker accepts either.
 GATE_EVAL_JS = """await p.evaluate(() => ({
   overlay: !!document.querySelector('.staging-gate-overlay'),
-  main: !!(document.querySelector('main#content') &&
-           document.querySelector('main#content').children.length),
+  main: !!((document.querySelector('main#content') &&
+            document.querySelector('main#content').children.length) ||
+           (document.querySelector('#map') &&
+            document.querySelector('#map').children.length)),
 }))"""
 
 
@@ -105,7 +108,8 @@ def gate_result_ok(probe):
 
 
 def write_manifest(outdir, data):
-    (outdir / "manifest.json").write_text(json.dumps(data, indent=2) + "\n")
+    with open(os.path.join(outdir, "manifest.json"), "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(data, indent=2) + "\n")
 
 
 def bb_open(host_id="host_yat733yf8z"):
@@ -147,8 +151,8 @@ def set_gate_cookie(session, base, cookie):
         "const p = await browser.getPage('main');\n"
         f"await p.goto('{base}', {{waitUntil: 'load'}});\n"
         f"await p.evaluate(() => {{ document.cookie = '{cookie['name']}={cookie['value']}; "
-        "Path=/; Secure; SameSite=Lax; Max-Age=2592000'; }});\n"
-        "return await p.evaluate(() => document.cookie.includes(arguments === undefined ? '' : 'psp_staging=') || true);"
+        "Path=/; Secure; SameSite=Lax; Max-Age=2592000'; });\n"
+        "return await p.evaluate(() => document.cookie.indexOf('psp_staging=') !== -1);\n"
     )
     return run_script(session, script)
 

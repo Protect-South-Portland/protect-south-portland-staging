@@ -100,7 +100,9 @@ def test_gate_result_ok_requires_no_overlay_and_content():
 
 def test_gate_eval_checks_the_overlay_and_the_content_marker():
     assert ".staging-gate-overlay" in us.GATE_EVAL_JS
-    assert "main" in us.GATE_EVAL_JS
+    # the map pages carry no <main>: their #map shell counts as content too
+    assert "#map" in us.GATE_EVAL_JS
+    assert "main#content" in us.GATE_EVAL_JS
 
 
 def test_manifest_contract(tmp_path):

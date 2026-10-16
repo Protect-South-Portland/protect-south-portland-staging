@@ -1,3 +1,9 @@
 __pycache__/
 *.pyc
 _ci_scratch/
+
+# Row 43 (2026-10-15 operator directive): UAT artifacts are per-run evidence,
+# never in the repo (screenshots, manifests, verdict docs under date dirs).
+# Fixture-class evidence (e.g. tests/evidence/row-40/) is a different thing
+# and stays tracked.
+tests/evidence/uat-snapshots/

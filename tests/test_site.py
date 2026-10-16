@@ -776,6 +776,22 @@ def test_get_involved_current_ask_and_relocation(docs):
     assert "pressherald.com/contact/" in gi
 
 
+def test_get_involved_odor_report_dual_channel(docs):
+    """Row 45: the city's Odor Report form joins the SMC app as the dual
+    reporting channel; the two dictated paragraphs sit directly under the
+    SMC download paragraph inside the same section."""
+    gi = read(docs, "get-involved.html")
+    assert "https://www.southportland.gov/FormCenter/Air-Quality-9/City-of-South-Portland-Odor-Report-Form-60" in gi
+    assert ">Odor Report form</a>" in gi
+    assert "Smell My City App" in gi
+    assert "preferred method" in gi
+    assert "not publicly available in real-time" in gi
+    smc = gi.index("Click here to download")
+    form = gi.index("Odor Report form")
+    next_section = gi.index("Write to City Councilors")
+    assert smc < form < next_section, "form paragraphs must land under the SMC copy"
+
+
 def test_about_tense_fixes(docs):
     ab = read(docs, "about.html")
     assert "fifth year" not in ab

@@ -49,6 +49,7 @@ it on the next Pages build.
 """
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -71,11 +72,193 @@ STAGING_REPO = "cristoslc/protect-south-portland-staging"
 PROD_REPO = "cristoslc/protect-south-portland-published"
 DEFAULT_REPO = STAGING_REPO
 
+# Ledger row 42 (operator directive, 2026-10-15): staging obscurity + cookie
+# gate. The staging leg (and ONLY the leg that targets STAGING_REPO) applies
+# three layers to the tree right before the orphan commit: a Disallow-all
+# robots.txt, a noindex/nofollow meta on every staged page, and a JS cookie
+# gate whose embedded value is ONLY the passphrase's SHA-256 — the passphrase
+# itself arrives at publish time (PSP_STAGING_PASSPHRASE env or the
+# gitignored .env beside the checkout) and a missing value refuses the leg
+# loud. Honest threat model: robots/noindex are real crawl protection; the
+# cookie gate is DETERRENCE (Pages serves the full HTML regardless of JS).
+# Production carries none of it: the gate marker is a private-surface marker
+# in psp_public, so a gated tree fails any prod leg's scan loud.
+STAGING_GATE = True
+ENV_NAME = "PSP_STAGING_PASSPHRASE"
+STAGING_DOTENV = os.path.join(os.path.dirname(ROOT), ".env")
+GATE_COOKIE = "psp_staging"
+GATE_MARKER = "staging-gate"
+GATE_ROBOTS_TEXT = (
+    "# Staging mirror variant — not the production site.\n"
+    "User-agent: *\n"
+    "Disallow: /\n"
+)
+
 
 def repo_pages_base(repo):
     """GitHub Pages URL root for a repo: https://{owner}.github.io/{name}."""
     owner, _, name = repo.partition("/")
     return f"https://{owner}.github.io/{name}"
+
+
+# Row-42 gate, injected as ONE block right after every staged page's <head>:
+# the noindex meta + the deferred cookie-gate script. Plain prompt strings
+# per the commission; placeholder @HASH@ becomes the passphrase's digest.
+GATE_HEAD_BLOCK = r'''<meta name="robots" content="noindex, nofollow">
+<script>
+(function () {
+  /* Staging review gate (row 42): deterrence-grade, staging mirror only. */
+  var REQUIRED = "@HASH@";
+  var COOKIE = "psp_staging";
+  var docEl = document.documentElement;
+  docEl.className += " staging-gate";
+  var style = document.createElement("style");
+  style.textContent =
+    ".staging-gate body{visibility:hidden!important}" +
+    ".staging-gate-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;" +
+    "align-items:center;justify-content:center;background:#122a2c;color:#e6f1f1;" +
+    "font:16px/1.5 'Segoe UI',system-ui,sans-serif}" +
+    ".staging-gate-card{background:#fff;color:#26383a;padding:22px 26px;border-radius:14px;" +
+    "max-width:22rem;box-shadow:0 2px 14px rgba(0,0,0,.35)}" +
+    ".staging-gate-title{margin:0 0 10px;font-weight:800;color:#1d3e40}" +
+    ".staging-gate-label{display:block;margin-bottom:6px;font-size:.85rem;color:#5c6b6d}" +
+    ".staging-gate-input{box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #dde8e8;" +
+    "border-radius:8px;font:inherit}" +
+    ".staging-gate-submit{margin-top:10px;padding:9px 16px;border:0;border-radius:999px;" +
+    "background:#b8401a;color:#fff;font-weight:800;cursor:pointer}" +
+    ".staging-gate-wrong{margin:8px 0 0;color:#b8401a;font-size:.85rem}";
+  function cookieValue() {
+    var parts = document.cookie.split(/;\s*/);
+    for (var i = 0; i < parts.length; i++) {
+      var pair = parts[i].split("=");
+      if (pair[0] === COOKIE) return pair[1];
+    }
+    return null;
+  }
+  function reveal() {
+    docEl.className = docEl.className.replace(" staging-gate", "");
+    var overlay = document.querySelector(".staging-gate-overlay");
+    if (overlay && overlay.parentElement) overlay.parentElement.removeChild(overlay);
+  }
+  function hex(buffer) {
+    var out = [], bytes = new Uint8Array(buffer);
+    for (var i = 0; i < bytes.length; i++) out.push(("0" + bytes[i].toString(16)).slice(-2));
+    return out.join("");
+  }
+  function boot() {
+    if (cookieValue() === REQUIRED) { reveal(); return; }
+    if (!window.crypto || !crypto.subtle) {
+      // fail closed with a plain message: no digest API, no check, no page
+      // (real staging serves over TLS or 127.0.0.1, where subtle exists)
+      card = document.createElement("div");
+      card.className = "staging-gate-card";
+      card.textContent = "This browser cannot verify the access phrase.";
+      var shell = document.createElement("div");
+      shell.className = "staging-gate-overlay";
+      shell.appendChild(card);
+      docEl.appendChild(shell);
+      return;
+    }
+    var overlay = document.createElement("div");
+    overlay.className = "staging-gate-overlay";
+    var card = document.createElement("div");
+    card.className = "staging-gate-card";
+    card.innerHTML = '<p class="staging-gate-title">Staging review</p>' +
+      '<form><label class="staging-gate-label" for="staging-gate-phrase">Enter access phrase</label>' +
+      '<input class="staging-gate-input" id="staging-gate-phrase" type="password" autocomplete="off">' +
+      '<button class="staging-gate-submit" type="submit">Enter</button>' +
+      '<p class="staging-gate-wrong" hidden>Access phrase not recognized.</p></form>';
+    overlay.appendChild(card);
+    docEl.appendChild(overlay);
+    var input = card.querySelector(".staging-gate-input");
+    card.querySelector("form").addEventListener("submit", function (event) {
+      event.preventDefault();
+      crypto.subtle.digest("SHA-256", new TextEncoder().encode(input.value))
+        .then(function (digest) {
+          if (hex(digest) === REQUIRED) {
+            document.cookie = COOKIE + "=" + REQUIRED +
+              "; Path=/; Secure; SameSite=Lax; Max-Age=2592000";
+            reveal();
+          } else {
+            card.querySelector(".staging-gate-wrong").hidden = false;
+            input.value = "";
+            input.focus();
+          }
+        });
+    });
+    input.focus();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>'''
+
+
+def dotenv_value(path, key):
+    """The last KEY=VALUE hit for key in a minimal dotenv file (no deps)."""
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        if name.strip() == key:
+            return value.strip()
+    return None
+
+
+def staging_passphrase():
+    """The staging passphrase: PSP_STAGING_PASSPHRASE env first, then the
+    gitignored .env beside the checkout. Missing = loud refusal, no
+    placeholder, no default (row 42)."""
+    value = os.environ.get(ENV_NAME, "").strip()
+    if value:
+        return value
+    if os.path.exists(STAGING_DOTENV):
+        found = dotenv_value(STAGING_DOTENV, ENV_NAME)
+        if found:
+            return found
+    raise SystemExit(
+        f"{ENV_NAME} missing: the staging gate needs the passphrase in the "
+        f"environment or {STAGING_DOTENV} — refusing to publish a gate it "
+        "cannot key properly")
+
+
+def apply_staging_gate(tree, passphrase):
+    """Row 42, staging leg only: write the Disallow-all robots.txt (staging
+    variant) and inject the noindex meta + cookie-gate script after every
+    staged page's <head>. Refuses louder variants: a tree that already
+    carries robots.txt or the gate marker (double-gate), and any staged
+    page without a <head> to protect. Returns the gated page count."""
+    if os.path.exists(os.path.join(tree, "robots.txt")):
+        raise SystemExit(
+            f"{tree}/robots.txt already exists — the staging gate applies "
+            "to a fresh staged tree only (refusing a possibly double-gated "
+            "tree)")
+    open(os.path.join(tree, "robots.txt"), "w", encoding="utf-8").write(GATE_ROBOTS_TEXT)
+    digest = hashlib.sha256(passphrase.encode("utf-8")).hexdigest()
+    block = GATE_HEAD_BLOCK.replace("@HASH@", digest)
+    headless = []
+    count = 0
+    for dirpath, dirnames, filenames in os.walk(tree):
+        dirnames.sort()
+        for name in sorted(filenames):
+            if not name.endswith(".html"):
+                continue
+            path = os.path.join(dirpath, name)
+            text = open(path, encoding="utf-8").read()
+            if GATE_MARKER in text:
+                raise SystemExit(f"{path}: already gated — refusing a double gate")
+            if "<head>" not in text:
+                headless.append(os.path.relpath(path, tree))
+                continue
+            open(path, "w", encoding="utf-8").write(
+                text.replace("<head>", "<head>\n" + block, 1))
+            count += 1
+    if headless:
+        raise SystemExit(
+            "staged page(s) carry no <head> — the gate cannot protect them, "
+            "refusing: " + ", ".join(headless))
+    return count
 
 
 def repo_url(repo):
@@ -562,6 +745,11 @@ def main():
     is_remote_target = os.path.abspath(
         mirror_dir) == os.path.abspath(default_mirror_dir(args.repo))
     pages_base = repo_pages_base(args.repo)
+    # Row 42: the gate rides the leg that targets the staging mirror — the
+    # prod leg (explicit --repo) never carries it. The passphrase reads
+    # FIRST so a missing value fails loud before any real work happens.
+    staging_gate_on = args.repo == STAGING_REPO and STAGING_GATE
+    gate_passphrase = staging_passphrase() if staging_gate_on else None
 
     review_model, per_page = load_gate_report(args.gate_report)
     require_clean_worktree()
@@ -576,12 +764,20 @@ def main():
     build_site()
 
     staging = tempfile.mkdtemp(prefix="psp-publish-")
+    gated = 0
     try:
         file_count = stage_publish_tree(staging, cname=domain)
         ensure_git_repo(mirror_dir, is_remote_target, args.repo)
         removed = sync_tree(staging, mirror_dir)
         psp_public.assert_clean(
             psp_public.scan_tree(mirror_dir), "mirror worktree")
+        if staging_gate_on:
+            # Row 42: gate AFTER the mirror scan — the intentional gate must
+            # never trip the scanner that ships it (the marker stays a
+            # forbidden private-surface string for every OTHER leg).
+            gated = apply_staging_gate(mirror_dir, gate_passphrase)
+            print(f"staging gate (row 42): {gated} pages + robots.txt — "
+                  "deterrence-grade; prod legs never carry the marker")
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -594,6 +790,7 @@ def main():
         f"Release gate (AGENTS.md): all pages passed the humanizer + style "
         f"review on model {review_model}. Rounds to pass: {per_page}.\n"
         f"Snapshot: {snapshot}."
+        + (f"\nStaging gate (row 42): {gated} pages gated." if staging_gate_on else "")
         + (f"\n{args.note}" if args.note else ""))
 
     if is_remote_target:

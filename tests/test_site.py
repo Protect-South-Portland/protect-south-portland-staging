@@ -22,6 +22,7 @@ Builds site/pages into a temp dir via tools/build.py and pins the hard rules:
 """
 
 import html
+import hashlib
 import os
 import re
 import shutil
@@ -200,6 +201,110 @@ def test_row40_landing_retitle(docs):
         "clear-skies.html", "fertilizer-ban.html", "pesticides.html",
     ):
         assert f'href="{href}"' in page, href
+
+
+# ---- row 42 (2026-10-15): staging obscurity + cookie gate (staging leg only) ----
+
+GATE_TEST_PASSPHRASE = "correct pass"
+
+
+def staged_tree(tmp_path, docs, name):
+    tree = tmp_path / name
+    tree.mkdir()
+    publish.stage_publish_tree(str(tree), docs_dir=str(docs))
+    return str(tree)
+
+
+def html_relpaths(tree):
+    paths = []
+    for dirpath, dirnames, filenames in os.walk(tree):
+        dirnames.sort()
+        for name in sorted(filenames):
+            if name.endswith(".html"):
+                paths.append(os.path.relpath(os.path.join(dirpath, name), tree))
+    return sorted(paths)
+
+
+def test_row42_flag_constants():
+    assert publish.STAGING_GATE is True, "staging target ships the gate by default (row 42)"
+    assert publish.GATE_COOKIE == "psp_staging"
+    assert publish.GATE_MARKER == "staging-gate"
+    assert "Disallow: /" in publish.GATE_ROBOTS_TEXT
+
+
+def test_row42_prod_staged_tree_has_no_gate(tmp_path, docs):
+    # prod/mirror staged tree: never gated, never disallowed. The map
+    # artifacts keep their pre-existing embed noindex (unchanged behavior)
+    tree = staged_tree(tmp_path, docs, "prod")
+    assert not os.path.exists(os.path.join(tree, "robots.txt"))
+    assert "staging-gate" in psp_public.PRIVATE_MARKERS
+    for rel in html_relpaths(tree):
+        text = open(os.path.join(tree, rel), encoding="utf-8").read()
+        assert "staging-gate" not in text, rel
+        assert "Disallow: /" not in text, rel
+        if rel.startswith("map/"):
+            continue
+        assert 'name="robots"' not in text, rel
+
+
+def test_row42_prod_scan_refuses_a_gated_tree(tmp_path, docs):
+    # the prod-side guard (row 42): a tree carrying the gate marker fails
+    # the mirror scan loud — a gated tree can never reach a prod leg quietly
+    tree = staged_tree(tmp_path, docs, "prod-scan")
+    open(os.path.join(tree, "index.html"), "a", encoding="utf-8").write("<!-- staging-gate -->")
+    with pytest.raises(SystemExit):
+        psp_public.assert_clean(psp_public.scan_tree(tree), "scratch")
+
+
+def test_row42_staging_gate_positive(tmp_path, docs):
+    # the staging leg's gate: Disallow-all robots + noindex/nofollow meta +
+    # the per-page cookie-gate script on EVERY staged html; the passphrase
+    # itself never ships — only its SHA-256 hex
+    tree = staged_tree(tmp_path, docs, "staging")
+    before = html_relpaths(tree)
+    expected_hash = hashlib.sha256(GATE_TEST_PASSPHRASE.encode("utf-8")).hexdigest()
+    count = publish.apply_staging_gate(tree, GATE_TEST_PASSPHRASE)
+    assert count == len(before) >= 19
+    assert html_relpaths(tree) == before, "the gate adds robots.txt, renames no page"
+    assert open(os.path.join(tree, "robots.txt"), encoding="utf-8").read() == publish.GATE_ROBOTS_TEXT
+    for rel in html_relpaths(tree):
+        text = open(os.path.join(tree, rel), encoding="utf-8").read()
+        assert '<meta name="robots" content="noindex, nofollow">' in text, rel
+        assert "staging-gate" in text, rel
+        assert "psp_staging" in text, rel
+        assert expected_hash in text, rel
+        assert GATE_TEST_PASSPHRASE not in text, rel
+
+
+def test_row42_gate_refuses_missing_head(tmp_path):
+    tree = tmp_path / "headless"
+    tree.mkdir()
+    open(os.path.join(str(tree), "page.html"), "w", encoding="utf-8").write(
+        "<html><body>hi</body></html>")
+    with pytest.raises(SystemExit):
+        publish.apply_staging_gate(str(tree), GATE_TEST_PASSPHRASE)
+
+
+def test_row42_gate_refuses_double_gate(tmp_path, docs):
+    tree = staged_tree(tmp_path, docs, "twice")
+    assert publish.apply_staging_gate(tree, GATE_TEST_PASSPHRASE) > 0
+    with pytest.raises(SystemExit):
+        publish.apply_staging_gate(tree, GATE_TEST_PASSPHRASE)
+
+
+def test_row42_passphrase_sources_and_loud_refusal(tmp_path, monkeypatch):
+    # passphrase: env wins, then the gitignored .env beside the checkout;
+    # neither present = the staging leg refuses loud (no placeholder, ever)
+    monkeypatch.setattr(publish, "STAGING_DOTENV", os.path.join(str(tmp_path), "env"))
+    monkeypatch.delenv(publish.ENV_NAME, raising=False)
+    with pytest.raises(SystemExit) as missing:
+        publish.staging_passphrase()
+    assert publish.ENV_NAME in str(missing.value)
+    open(os.path.join(str(tmp_path), "env"), "w", encoding="utf-8").write(
+        "# comment\nOTHER=1\n" + publish.ENV_NAME + "=from-dotenv\n")
+    assert publish.staging_passphrase() == "from-dotenv"
+    monkeypatch.setenv(publish.ENV_NAME, "from-env")
+    assert publish.staging_passphrase() == "from-env"
 
 
 def test_map_not_the_lead_on_tank_farms_page(docs):

@@ -30,6 +30,12 @@ PRIVATE_MARKERS = (
     "Fact-check log",
     "Data files",
     "GitHub repo",
+    # Ledger row 42 (2026-10-15): the staging cookie gate's marker. The gate
+    # is a staging-leg feature only — production must never carry it, so the
+    # marker sits in this list and any gated tree fails a prod leg's scan
+    # loud. (The staging leg applies the gate AFTER its own scan, so the
+    # intentional gate never trips the scanner that ships it.)
+    "staging-gate",
 )
 
 # Ledger row 9 (constraint): the Oct 15 assembly is never on the public site.

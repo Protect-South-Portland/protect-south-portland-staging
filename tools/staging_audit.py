@@ -29,6 +29,7 @@ Usage:
 """
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -41,6 +42,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build
+import publish
 
 SITE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -220,7 +222,27 @@ def public_pages():
     return ["index.html"] + names + sorted(build.REDIRECTS) + [MAP_EMBED]
 
 
-def run_audit(base_url, pages=None, fetch=None, lh=None):
+def gate_extra_headers(base_url):
+    """Row 42 r2: the psp_staging cookie as an extra-header, byte-compatible
+    with what the gate sets, attached to BOTH the fetches (page HTTP-200 +
+    the served-stylesheet floor check) and the Lighthouse runs so the audit
+    measures the real pages instead of the gate overlay. The passphrase
+    comes from publish's own loader (env / the same workspace .env) — there
+    is no second copy of the credential logic. Missing value: loud
+    (infrastructure error) when the target IS the default staging URL the
+    gate protects; no header when an overridden base names a non-gated
+    target (e.g. a local serve)."""
+    try:
+        value = publish.staging_passphrase()
+    except SystemExit as exc:
+        if base_url == DEFAULT_BASE_URL:
+            raise AuditInfraError(str(exc)) from exc
+        return None
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return {"Cookie": f"{publish.GATE_COOKIE}={digest}"}
+
+
+def run_audit(base_url, pages=None, fetch=None, lh=None, extra_headers=None):
     """Audit {base}: per-page HTTP status, Lighthouse (desktop everywhere +
     mobile on index), and the typography floor of the SERVED stylesheet.
 
@@ -235,7 +257,7 @@ def run_audit(base_url, pages=None, fetch=None, lh=None):
     page_results = {}
 
     try:
-        css_status, css_text = fetch(f"{base}/styles.css")
+        css_status, css_text = fetch(f"{base}/styles.css", extra_headers=extra_headers)
     except AuditInfraError:
         raise
     css_fetched = css_status == 200
@@ -252,7 +274,7 @@ def run_audit(base_url, pages=None, fetch=None, lh=None):
         entry = {"status": None, "lighthouse_score": None,
                  "lighthouse": None, "mobile_score": None, "mobile_failed": None}
         try:
-            status, _ = fetch(url)
+            status, _ = fetch(url, extra_headers=extra_headers)
         except AuditInfraError:
             raise
         entry["status"] = status
@@ -262,14 +284,14 @@ def run_audit(base_url, pages=None, fetch=None, lh=None):
             page_results[page] = entry
             continue
         try:
-            score, failed = lh(url, "desktop")
+            score, failed = lh(url, "desktop", extra_headers=extra_headers)
             entry["lighthouse_score"], entry["lighthouse"] = score, failed
             if score is not None and score < 1.0:
                 findings.append(Finding(
                     f"lighthouse:{page}", f"Lighthouse accessibility {score * 100:.0f}%",
                     "failed audits: " + (", ".join(failed) or "none listed")))
             if page == "index.html":
-                mobile_score, mobile_failed = lh(url, "mobile")
+                mobile_score, mobile_failed = lh(url, "mobile", extra_headers=extra_headers)
                 entry["mobile_score"], entry["mobile_failed"] = mobile_score, mobile_failed
                 if mobile_score is not None and mobile_score < 1.0:
                     findings.append(Finding(
@@ -285,10 +307,12 @@ def run_audit(base_url, pages=None, fetch=None, lh=None):
 
 # ---------- real collaborators ----------
 
-def http_fetch(url):
+def http_fetch(url, extra_headers=None):
     """(status, text) for a URL; a non-2xx is a normal return, an
-    unreachable host is infrastructure."""
-    request = urllib.request.Request(url, headers={"User-Agent": "psp-staging-audit/1"})
+    unreachable host is infrastructure. extra_headers carries the row-42
+    staging-gate cookie (byte-compatible with the gate's own Set-Cookie)."""
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "psp-staging-audit/1", **(extra_headers or {})})
     try:
         with urllib.request.urlopen(request, timeout=30) as resp:
             return resp.status, resp.read().decode("utf-8", errors="replace")
@@ -325,8 +349,10 @@ def parse_lighthouse(data):
         raise AuditInfraError(f"unexpected Lighthouse JSON shape: {exc}") from exc
 
 
-def lighthouse_run(url, form_factor):
-    """(score, failed ids) for one Lighthouse run; a crash is infra."""
+def lighthouse_run(url, form_factor, extra_headers=None):
+    """(score, failed ids) for one Lighthouse run; a crash is infra.
+    extra_headers carries the row-42 staging-gate cookie so the measured
+    page is the real one, not the gate overlay."""
     chrome = find_chrome()
     if not chrome:
         raise AuditInfraError("no Chrome for Lighthouse — set CHROME_PATH")
@@ -341,6 +367,8 @@ def lighthouse_run(url, form_factor):
                "--chrome-flags=--headless=new --no-sandbox --disable-gpu"]
         if form_factor == "desktop":
             cmd.append("--preset=desktop")
+        if extra_headers:
+            cmd.append("--extra-headers=" + json.dumps(extra_headers))
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         except subprocess.TimeoutExpired as exc:
@@ -415,7 +443,8 @@ def main(argv=None):
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     try:
-        result = run_audit(args.base_url)
+        result = run_audit(args.base_url,
+                           extra_headers=gate_extra_headers(args.base_url))
     except AuditInfraError as exc:
         print(f"INFRASTRUCTURE FAILURE — {exc}", file=sys.stderr)
         print("Findings are non-blocking by contract; a broken environment is not a "

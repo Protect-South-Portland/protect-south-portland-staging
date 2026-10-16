@@ -15,6 +15,7 @@ pure logic with zero network:
 - the public page list, sourced from the repo (build.REDIRECTS + map).
 """
 
+import hashlib
 import os
 import sys
 
@@ -24,6 +25,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import build
+import publish
 import staging_audit as sa
 
 
@@ -141,8 +143,10 @@ class FakeFetch:
         self.statuses = dict(statuses)
         self.css_text = css_text
         self.fail = fail
+        self.headers_seen = []
 
-    def __call__(self, url):
+    def __call__(self, url, extra_headers=None):
+        self.headers_seen.append((url, extra_headers))
         if self.fail:
             raise sa.AuditInfraError("connection refused")
         path = url.rstrip("/").rsplit("/", 1)[-1]
@@ -157,8 +161,8 @@ class FakeLighthouse:
         self.failed = list(failed)
         self.calls = []
 
-    def __call__(self, url, form_factor):
-        self.calls.append((url, form_factor))
+    def __call__(self, url, form_factor, extra_headers=None):
+        self.calls.append((url, form_factor, extra_headers))
         return self.score, self.failed
 
 PAGES = ["index.html", "about.html"]
@@ -194,7 +198,7 @@ def test_404_page_becomes_a_finding_not_an_infra_error():
                           lh=lhs)
     assert [f.id for f in result["findings"]] == ["http:about.html"]
     # a 404 page gets no Lighthouse run: an audit of an error page is noise
-    assert not any(url.endswith("/about.html") for url, _ in lhs.calls)
+    assert not any(url.endswith("/about.html") for url, _, _ in lhs.calls)
 
 
 def test_lighthouse_failures_become_findings():
@@ -244,6 +248,56 @@ def test_public_page_list_covers_every_source_page_redirects_and_map():
             assert page in pages, f"missing {page}"
     assert "map/embed.html" in pages
     assert set(build.REDIRECTS) <= set(pages), "redirect stub URLs are public"
+
+
+# ---------- row 42 r2: the audit passes through the staging gate ----------
+
+def test_gate_extra_headers_reads_the_same_dotenv_as_publish(tmp_path, monkeypatch):
+    monkeypatch.setattr(publish, "STAGING_DOTENV", os.path.join(str(tmp_path), "env"))
+    monkeypatch.delenv(publish.ENV_NAME, raising=False)
+    open(os.path.join(str(tmp_path), "env"), "w", encoding="utf-8").write(
+        publish.ENV_NAME + "=shibboleth\n")
+    expected = {"Cookie": "psp_staging=" + hashlib.sha256(b"shibboleth").hexdigest()}
+    assert sa.gate_extra_headers(sa.DEFAULT_BASE_URL) == expected
+
+
+def test_gate_extra_headers_missing_on_the_staging_target_is_loud(tmp_path, monkeypatch):
+    monkeypatch.setattr(publish, "STAGING_DOTENV", os.path.join(str(tmp_path), "absent"))
+    monkeypatch.delenv(publish.ENV_NAME, raising=False)
+    with pytest.raises(sa.AuditInfraError) as loud:
+        sa.gate_extra_headers(sa.DEFAULT_BASE_URL)
+    assert publish.ENV_NAME in str(loud.value)
+
+
+def test_gate_extra_headers_missing_on_an_overridden_base_is_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(publish, "STAGING_DOTENV", os.path.join(str(tmp_path), "absent"))
+    monkeypatch.delenv(publish.ENV_NAME, raising=False)
+    assert sa.gate_extra_headers("http://127.0.0.1:8814") is None
+
+
+def test_audit_threads_the_header_to_fetch_and_lighthouse(tmp_path, monkeypatch):
+    monkeypatch.setattr(publish, "STAGING_DOTENV", os.path.join(str(tmp_path), "env"))
+    monkeypatch.delenv(publish.ENV_NAME, raising=False)
+    open(os.path.join(str(tmp_path), "env"), "w", encoding="utf-8").write(
+        publish.ENV_NAME + "=shibboleth\n")
+    header = {"Cookie": "psp_staging=" + hashlib.sha256(b"shibboleth").hexdigest()}
+    fetch = FakeFetch({"index.html": 200, "about.html": 200}, CSS)
+    lhs = FakeLighthouse()
+    sa.run_audit(sa.DEFAULT_BASE_URL, PAGES, fetch=fetch, lh=lhs,
+                 extra_headers=sa.gate_extra_headers(sa.DEFAULT_BASE_URL))
+    # every fetch (pages + the served stylesheet) and every Lighthouse run
+    # carries the byte-compatible psp_staging cookie
+    assert fetch.headers_seen, "the audit must fetch"
+    assert all(seen == header for _, seen in fetch.headers_seen)
+    assert lhs.calls and all(headers == header for _, _, headers in lhs.calls)
+
+
+def test_audit_without_gate_passes_no_headers():
+    fetch = FakeFetch({"index.html": 200, "about.html": 200}, CSS)
+    lhs = FakeLighthouse()
+    sa.run_audit("http://127.0.0.1:8814", PAGES, fetch=fetch, lh=lhs)
+    assert all(seen is None for _, seen in fetch.headers_seen)
+    assert all(headers is None for _, _, headers in lhs.calls)
 
 
 # ---------- parse_lighthouse (real runner shape) ----------

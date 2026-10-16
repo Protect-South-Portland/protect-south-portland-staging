@@ -44,7 +44,7 @@ import build
 
 SITE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DEFAULT_BASE_URL = "https://staging-b1fa9840.protectsouthportland.org"
+DEFAULT_BASE_URL = "https://staging.protectsouthportland.org"
 DEFAULT_REPO = "cristoslc/protect-south-portland-site"
 
 LABELS = (

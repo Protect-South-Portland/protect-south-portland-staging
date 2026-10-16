@@ -767,7 +767,7 @@ def test_public_scan_skips_binary_formats(tmp_path):
 # ---- target already carries.                                          ----
 
 STAGING_PUBLISH_REPO = "cristoslc/protect-south-portland-staging"
-STAGING_PUBLISH_DOMAIN = "staging-b1fa9840.protectsouthportland.org"
+STAGING_PUBLISH_DOMAIN = "staging.protectsouthportland.org"
 
 
 def test_publish_defaults_stay_on_staging():

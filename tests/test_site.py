@@ -146,8 +146,20 @@ def test_nav_structure_after_split(docs):
             continue
         m = re.search(r'<nav class="main-nav".*?</nav>', read(docs, name), re.S)
         nav = m.group(0)
-        assert "Active campaigns" in nav, name
+        # row 40 (2026-10-15): one "Our work" header item; the active
+        # campaigns are its first children and the past-work pages live in a
+        # nested flyout labeled Past work
+        assert "Our work" in nav, name
+        assert "Active campaigns" not in nav, name
         assert "Past work" in nav, name
+        assert 'href="our-campaigns.html"' in nav, name
+        assert 'aria-haspopup="true"' in nav, name
+        assert "aria-expanded=" in nav, name
+        first_child = nav.index(">South Portland Tank Farms<")
+        past_label = nav.index(">Past work<")
+        all_past = nav.index(">All past work<")
+        yard = nav.index(">Yard South Proposal<")
+        assert first_child < past_label < all_past < yard, name
         assert "Our Campaigns" not in nav, name
         assert "oil-tank-emissions.html" not in nav, name
         assert "vocs.html" not in nav, name
@@ -157,6 +169,37 @@ def test_nav_structure_after_split(docs):
     assert EMBED_URL in tf
     assert 'id="health-effects-of-vocs"' in tf
     assert "assets/files/hem3-report-summary.pdf" in tf
+
+
+def test_row40_flyout_structure_on_built_page(docs):
+    # row 40 (2026-10-15): the Past work flyout + its five children render in
+    # the built chrome on a page nobody edited for this row (404.html): one
+    # nested flyout per nav, every child a real link
+    nav = re.search(r'<nav class="main-nav".*?</nav>', read(docs, "404.html"), re.S).group(0)
+    assert nav.count('<li class="has-sub has-flyout">') == 1, nav
+    assert nav.count('class="submenu flyout"') == 1, nav
+    for link in (
+        'href="past-work.html">All past work</a>',
+        'href="yard-south-proposal.html">Yard South Proposal</a>',
+        'href="clear-skies.html">Clear Skies</a>',
+        'href="fertilizer-ban.html">Fertilizer Ban</a>',
+        'href="pesticides.html">Pesticides</a>',
+    ):
+        assert link in nav, link
+
+
+def test_row40_landing_retitle(docs):
+    # row 40 landing coherence: the "Our work" nav item lands on a page whose
+    # h1 + title carry the dictated label; the archive + the four past-work
+    # items are linked from the body (compact section, no prose changes)
+    page = read(docs, "our-campaigns.html")
+    assert "<h1>Our work</h1>" in page, page[:400]
+    assert re.search(r"<title>Our work[^<]*</title>", page), page[:400]
+    for href in (
+        "past-work.html", "yard-south-proposal.html",
+        "clear-skies.html", "fertilizer-ban.html", "pesticides.html",
+    ):
+        assert f'href="{href}"' in page, href
 
 
 def test_map_not_the_lead_on_tank_farms_page(docs):

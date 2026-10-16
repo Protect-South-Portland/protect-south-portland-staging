@@ -138,6 +138,23 @@ img { max-width: 100%; height: auto; }
 
 .main-nav .submenu a:hover { background: var(--teal-100); color: var(--teal-900); }
 
+/* row 40 (2026-10-15): one "Our work" item; the Past work flyout expands
+   IN-PANEL (no right-edge clipping at narrow desktop widths), reusing the
+   mobile submenu's indented visual language. It opens on hover or
+   focus-within exactly like the top panel; the @media block below already
+   renders it as a static nested list on mobile. */
+
+.main-nav .has-flyout > .submenu {
+  position: static;
+  box-shadow: none;
+  border: none;
+  border-left: 3px solid var(--teal-100);
+  border-radius: 0;
+  margin: 6px 0 2px 6px;
+  padding: 2px 0 2px 8px;
+  min-width: 0;
+}
+
 /* Masthead boundary (2026-10-15 readability re-measure): the older-visitor
    root scale (112.5%) enlarges every rem-based nav size by 12.5%; at 0.95rem
    that grew the single-row desktop nav to 1072px of need against the 1060px

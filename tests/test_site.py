@@ -292,6 +292,18 @@ def test_row42_gate_refuses_double_gate(tmp_path, docs):
         publish.apply_staging_gate(tree, GATE_TEST_PASSPHRASE)
 
 
+def test_row42_gate_rewrites_the_prod_robots_variant(tmp_path, docs):
+    # docs/ ships a tracked Allow-all robots.txt (2026-10-12) that reaches
+    # every staged (real) tree; the staging gate REWRITES it to the
+    # Disallow-all staging variant (row 42: "staged robots.txt rewritten to
+    # Disallow-all"). The tmp build fixture does not include that tracked
+    # file, so the test seeds the tree with it.
+    tree = staged_tree(tmp_path, docs, "rewrite")
+    open(os.path.join(tree, "robots.txt"), "w", encoding="utf-8").write("User-agent: *\nAllow: /\n")
+    publish.apply_staging_gate(tree, GATE_TEST_PASSPHRASE)
+    assert open(os.path.join(tree, "robots.txt"), encoding="utf-8").read() == publish.GATE_ROBOTS_TEXT
+
+
 def test_row42_passphrase_sources_and_loud_refusal(tmp_path, monkeypatch):
     # passphrase: env wins, then the gitignored .env beside the checkout;
     # neither present = the staging leg refuses loud (no placeholder, ever)

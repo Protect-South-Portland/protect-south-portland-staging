@@ -229,11 +229,8 @@ def apply_staging_gate(tree, passphrase):
     staged page's <head>. Refuses louder variants: a tree that already
     carries robots.txt or the gate marker (double-gate), and any staged
     page without a <head> to protect. Returns the gated page count."""
-    if os.path.exists(os.path.join(tree, "robots.txt")):
-        raise SystemExit(
-            f"{tree}/robots.txt already exists — the staging gate applies "
-            "to a fresh staged tree only (refusing a possibly double-gated "
-            "tree)")
+    # docs/ ships a tracked Allow-all robots.txt that reaches every staged
+    # tree; the staging variant REWRITES it (row 42)
     open(os.path.join(tree, "robots.txt"), "w", encoding="utf-8").write(GATE_ROBOTS_TEXT)
     digest = hashlib.sha256(passphrase.encode("utf-8")).hexdigest()
     block = GATE_HEAD_BLOCK.replace("@HASH@", digest)

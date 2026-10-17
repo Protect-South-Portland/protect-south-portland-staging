@@ -429,6 +429,28 @@ blockquote {
 
 .card .card__more { font-weight: 800; text-decoration: none; }
 
+/* ---------- row 48: odor-report dual channel (get-involved) ---------- */
+
+/* The two reporting mechanisms read as peer actions: one grid, side by side
+   above 720px and stacked below it. No fixed widths, so nothing overflows
+   at 412px (the base .card sizing is min-content-exempt: grid items default
+   to min-width auto, and the cells hold only wrapping text). */
+.report-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+  margin: 0 0 1em;
+}
+
+@media (min-width: 720px) {
+  .report-actions { grid-template-columns: 1fr 1fr; }
+}
+
+/* the dictated copy is primary reading text, not caption gray, and must not
+   be stretched by the base card's flex column when a sibling runs longer */
+.report-actions__card p { color: var(--ink); flex: none; }
+.report-actions__card p:last-child { margin: 0; }
+
 /* ---------- petition strip (kept from live homepage) ---------- */
 
 .petition {

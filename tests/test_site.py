@@ -792,6 +792,38 @@ def test_get_involved_odor_report_dual_channel(docs):
     assert smc < form < next_section, "form paragraphs must land under the SMC copy"
 
 
+def test_row48_odor_report_visual_hierarchy(docs):
+    """Row 48: the reporting block reads as two peer actions. Both mechanisms
+    are present and linked, and the four row-45 dictated sentences survive
+    byte-exact — the pin asserts the sentences themselves, so any rewording
+    (or a split/merge that drops a word) fails loudly here."""
+    gi = read(docs, "get-involved.html")
+
+    # both mechanisms present and linked
+    assert 'href="https://smellmycity.org/"' in gi
+    assert 'href="https://www.southportland.gov/FormCenter/Air-Quality-9/City-of-South-Portland-Odor-Report-Form-60"' in gi
+
+    # the two row-45 sentences, asserted byte-exact
+    smc_sentence = (
+        "In addition to using the Smell My City App which displays results "
+        "publicly and in real-time, please also fill out the city&rsquo;s "
+        '<a href="https://www.southportland.gov/FormCenter/Air-Quality-9/'
+        'City-of-South-Portland-Odor-Report-Form-60">Odor Report form</a>.')
+    assert smc_sentence in gi, "the dictated bridge sentence must survive byte-exact"
+    preferred_sentence = (
+        "This is the city&rsquo;s preferred method for you to tell them about "
+        "each time you smell something bad. However, the log of odor reports "
+        "are not publicly available in real-time.")
+    assert preferred_sentence in gi, "the dictated preferred-method sentence must survive byte-exact"
+
+    # the two mechanisms read as sibling actions: their buttons sit in one
+    # shared row, and document order keeps the app before the form
+    assert gi.count("report-actions") >= 1
+    smc_btn = gi.index("smellmycity.org/")
+    form_btn = gi.index("City-of-South-Portland-Odor-Report-Form-60")
+    assert smc_btn < form_btn, "the app action must precede the form action"
+
+
 ROW47_COUNCILORS = (
     # (name as the operator relayed it, seat label as published, mail alias)
     ("Carter Scott", "District 1", "cscott"),

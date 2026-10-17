@@ -1,0 +1,103 @@
+{
+  "date": "row47-after",
+  "target": "staging",
+  "base": "http://127.0.0.1:8816/",
+  "gated": false,
+  "widths": [
+    412,
+    768,
+    1024,
+    1100,
+    1440
+  ],
+  "pages": [
+    "get-involved.html",
+    "act-now.html"
+  ],
+  "excluded": [
+    {
+      "page": "vocs.html",
+      "reason": "redirect stub"
+    },
+    {
+      "page": "oil-tank-emissions.html",
+      "reason": "redirect stub"
+    },
+    {
+      "page": "robots.txt",
+      "reason": "not a page"
+    }
+  ],
+  "samples": [
+    {
+      "page": "get-involved.html",
+      "width": 412,
+      "path": "get-involved-412.png",
+      "bytes": 514869,
+      "gate_open": true
+    },
+    {
+      "page": "get-involved.html",
+      "width": 768,
+      "path": "get-involved-768.png",
+      "bytes": 470350,
+      "gate_open": true
+    },
+    {
+      "page": "get-involved.html",
+      "width": 1024,
+      "path": "get-involved-1024.png",
+      "bytes": 469903,
+      "gate_open": true
+    },
+    {
+      "page": "get-involved.html",
+      "width": 1100,
+      "path": "get-involved-1100.png",
+      "bytes": 469667,
+      "gate_open": true
+    },
+    {
+      "page": "get-involved.html",
+      "width": 1440,
+      "path": "get-involved-1440.png",
+      "bytes": 491219,
+      "gate_open": true
+    },
+    {
+      "page": "act-now.html",
+      "width": 412,
+      "path": "act-now-412.png",
+      "bytes": 421910,
+      "gate_open": true
+    },
+    {
+      "page": "act-now.html",
+      "width": 768,
+      "path": "act-now-768.png",
+      "bytes": 528872,
+      "gate_open": true
+    },
+    {
+      "page": "act-now.html",
+      "width": 1024,
+      "path": "act-now-1024.png",
+      "bytes": 633456,
+      "gate_open": true
+    },
+    {
+      "page": "act-now.html",
+      "width": 1100,
+      "path": "act-now-1100.png",
+      "bytes": 663795,
+      "gate_open": true
+    },
+    {
+      "page": "act-now.html",
+      "width": 1440,
+      "path": "act-now-1440.png",
+      "bytes": 685443,
+      "gate_open": true
+    }
+  ]
+}

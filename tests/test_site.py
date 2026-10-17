@@ -792,6 +792,49 @@ def test_get_involved_odor_report_dual_channel(docs):
     assert smc < form < next_section, "form paragraphs must land under the SMC copy"
 
 
+ROW47_COUNCILORS = (
+    # (name as the operator relayed it, seat label as published, mail alias)
+    ("Carter Scott", "District 1", "cscott"),
+    ("Rachael Coleman", "District 2", "rcoleman"),
+    ("Misha Pride", "District 3", "mpride"),
+    ("Jessica Walker", "District 4", "jwalker"),
+    ("Elyse Tipton", "Mayor &mdash; District 5", "etipton"),
+    ("Richard Matthews", "At-Large", "rmatthews"),
+    ("Natalie West", "At-Large", "nwest"),
+)
+
+
+def test_row47_city_council_roster(docs):
+    """Row 47: the live contact pages carry the City's current councilor
+    roster (verified against southportland.gov/m/directory), with the general
+    address above it, in district order; the retired names and the dead domain
+    are gone. past-work.html keeps the historical 2024 list untouched."""
+    for name in ("get-involved.html", "act-now.html"):
+        page = read(docs, name)
+        for person, seat, alias in ROW47_COUNCILORS:
+            assert f"{person} ({seat})" in page, f"{name}: missing {person} ({seat})"
+            assert f'href="mailto:{alias}@southportland.gov"' in page, (
+                f"{name}: missing {alias} mailto")
+            assert f">{alias}@southportland.gov</a>" in page, (
+                f"{name}: missing {alias} visible address")
+        assert "citycouncil@southportland.gov" in page, (
+            f"{name}: general council address missing")
+        assert "Linda Cohen" not in page, f"{name}: retired name Linda Cohen"
+        assert "Steven Riley" not in page, f"{name}: retired name Steven Riley"
+        mailtos = re.findall(r'href="(mailto:[^"]+)"', page)
+        assert not any(m.lower().endswith("@southportland.org") for m in mailtos), (
+            f"{name}: dead-domain mailto survived")
+        # district order: each successive label appears after the previous one
+        positions = [page.index(f"{p} ({s})") for p, s, _ in ROW47_COUNCILORS]
+        assert positions == sorted(positions), f"{name}: roster out of district order"
+    # the general address line sits directly above the list on both pages
+    for name in ("get-involved.html", "act-now.html"):
+        page = read(docs, name)
+        general = page.index("citycouncil@southportland.gov")
+        first = page.index("Carter Scott")
+        assert general < first, f"{name}: general address must precede the list"
+
+
 def test_about_tense_fixes(docs):
     ab = read(docs, "about.html")
     assert "fifth year" not in ab

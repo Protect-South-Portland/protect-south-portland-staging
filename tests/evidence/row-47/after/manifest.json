@@ -1,7 +1,7 @@
 {
   "date": "row47-after",
   "target": "staging",
-  "base": "http://127.0.0.1:8816/",
+  "base": "http://127.0.0.1:8817/",
   "gated": false,
   "widths": [
     412,
@@ -33,70 +33,70 @@
       "page": "get-involved.html",
       "width": 412,
       "path": "get-involved-412.png",
-      "bytes": 514869,
+      "bytes": 515063,
       "gate_open": true
     },
     {
       "page": "get-involved.html",
       "width": 768,
       "path": "get-involved-768.png",
-      "bytes": 470350,
+      "bytes": 470288,
       "gate_open": true
     },
     {
       "page": "get-involved.html",
       "width": 1024,
       "path": "get-involved-1024.png",
-      "bytes": 469903,
+      "bytes": 469978,
       "gate_open": true
     },
     {
       "page": "get-involved.html",
       "width": 1100,
       "path": "get-involved-1100.png",
-      "bytes": 469667,
+      "bytes": 469317,
       "gate_open": true
     },
     {
       "page": "get-involved.html",
       "width": 1440,
       "path": "get-involved-1440.png",
-      "bytes": 491219,
+      "bytes": 490846,
       "gate_open": true
     },
     {
       "page": "act-now.html",
       "width": 412,
       "path": "act-now-412.png",
-      "bytes": 421910,
+      "bytes": 430622,
       "gate_open": true
     },
     {
       "page": "act-now.html",
       "width": 768,
       "path": "act-now-768.png",
-      "bytes": 528872,
+      "bytes": 553674,
       "gate_open": true
     },
     {
       "page": "act-now.html",
       "width": 1024,
       "path": "act-now-1024.png",
-      "bytes": 633456,
+      "bytes": 665773,
       "gate_open": true
     },
     {
       "page": "act-now.html",
       "width": 1100,
       "path": "act-now-1100.png",
-      "bytes": 663795,
+      "bytes": 700529,
       "gate_open": true
     },
     {
       "page": "act-now.html",
       "width": 1440,
       "path": "act-now-1440.png",
-      "bytes": 685443,
+      "bytes": 723071,
       "gate_open": true
     }
   ]

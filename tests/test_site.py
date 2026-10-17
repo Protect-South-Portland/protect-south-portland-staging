@@ -830,6 +830,12 @@ def test_row47_city_council_roster(docs):
     # the general address line sits directly above the list on both pages
     for name in ("get-involved.html", "act-now.html"):
         page = read(docs, name)
+        expected_line = (
+            'We recommend sending your email to the general email address '
+            '(<a href="mailto:citycouncil@southportland.gov">citycouncil@southportland.gov</a>), '
+            'as well as each councilor individually:')
+        assert expected_line in page, (
+            f"{name}: the dictated general-address line must ship byte-exact")
         general = page.index("citycouncil@southportland.gov")
         first = page.index("Carter Scott")
         assert general < first, f"{name}: general address must precede the list"

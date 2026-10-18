@@ -449,7 +449,10 @@ blockquote {
 /* the dictated copy is primary reading text, not caption gray, and must not
    be stretched by the base card's flex column when a sibling runs longer */
 .report-actions__card p { color: var(--ink); flex: none; }
-.report-actions__card p:last-child { margin: 0; }
+/* both cards are flex columns with no stretching copy, so the button
+   paragraph sinks to the card bottom and the two buttons land on one
+   baseline when the cards sit side by side */
+.report-actions__card p:last-child { margin: auto 0 0; }
 
 /* ---------- petition strip (kept from live homepage) ---------- */
 

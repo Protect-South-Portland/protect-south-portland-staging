@@ -264,7 +264,16 @@ def test_row42_staging_gate_positive(tmp_path, docs):
     before = html_relpaths(tree)
     expected_hash = hashlib.sha256(GATE_TEST_PASSPHRASE.encode("utf-8")).hexdigest()
     count = publish.apply_staging_gate(tree, GATE_TEST_PASSPHRASE)
-    assert count == len(before) >= 19
+    # the built tree's size depends on whether the sibling map repo is present
+    # (CI has no sibling: 16 source pages + 2 generated redirect stubs = 18;
+    # locally the map adds 2 more), so the floor is derived from the repo, not
+    # a frozen literal. The real contract is that the gate touches every
+    # staged page and renames none.
+    source_pages = [n for n in os.listdir(os.path.join(ROOT, "site", "pages"))
+                    if n.endswith(".html")]
+    assert len(before) >= len(source_pages), (
+        f"every built source page is staged ({len(before)} < {len(source_pages)})")
+    assert count == len(before), "the gate touches every staged page, renames none"
     assert html_relpaths(tree) == before, "the gate adds robots.txt, renames no page"
     assert open(os.path.join(tree, "robots.txt"), encoding="utf-8").read() == publish.GATE_ROBOTS_TEXT
     for rel in html_relpaths(tree):

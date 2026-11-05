@@ -386,7 +386,8 @@ def test_row6_hero_replaced_and_act_now_landing(docs):
     assert "Make a difference" not in all_html
     act = read(docs, "act-now.html")
     assert "https://southportland.gov/411/City-Council" in act
-    assert "pressure the DEP to use the existing licensing process" in act
+    assert "require better technology at the tank farms" in act
+    assert "publish the legal opinion" in act
 
 
 def test_row33_oct15_meeting_copy_published(docs):
@@ -1482,3 +1483,56 @@ def test_staging_gate_injects_static_stylesheet(tmp_path):
     # the embedded map iframe can take focus as it loads; the gate must take
     # it back so a visitor can type the phrase without clicking
     assert 'window.addEventListener("load"' in text
+
+
+def test_act_now_past_tense_and_one_email_action(docs):
+    # Ruling B (2026-11-05): the page asks for the outcome, not an instrument.
+    # The Oct. 27 workshop happened, so the opener states it and the page
+    # carries one real email-the-Council action. "Oct. 27" itself stays: the
+    # date describes a past event. What must be gone is every invitation to
+    # attend it. Never pin the date string's absence.
+    act = read(docs, "act-now.html")
+    assert "The City Council workshop was held on Oct. 27" in act
+    assert "took no vote" in act
+    assert "another workshop" in act
+    assert "no date has been set" in act
+    assert "require better technology at the tank farms" in act
+    assert "publish the legal opinion" in act
+    assert "special counsel" in act
+    # the invitation class: gone
+    assert "Make plans to come to the City Council workshop" not in act
+    assert "before the workshop" not in act
+    assert "637 Highland Ave" not in act
+    # the rejected instrument: not named, not implied
+    assert "municipal license" not in act
+    assert "license the tank farms" not in act
+    assert "pressure the DEP to use the existing licensing process" not in act
+    # one real action: general address plus the seven councilors, prefilled subject
+    m = re.search(r'href="(mailto:citycouncil@southportland\.gov\?cc=[^"]+subject=[^"]+)"', act)
+    assert m, "act-now.html must carry one prefilled email-the-Council mailto action"
+    for _, _, alias in ROW47_COUNCILORS:
+        assert f"{alias}%40southportland.gov" in m.group(1), alias
+    # the ready-to-send message and the roster still ship
+    assert "Dear Councilors," in act
+    assert "citycouncil@southportland.gov" in act
+
+
+def test_no_past_event_invitations(docs):
+    # Sitewide guard, per the 2026-11-05 acceptance-criterion correction: the
+    # date may appear where copy describes a past event, but no page may invite
+    # anyone to attend the Oct. 27 workshop. Two pages are exempt because their
+    # invitations are outside this row: index.html carries Mindy's Tier A banner
+    # and a workshop bullet (CTA audit §5 item 3), and tank-farms.html carries
+    # the same invitation in its workshop copy. Both need their own ruling.
+    invitations = (
+        "Make plans to come to the City Council workshop",
+        "Attend the City Council workshop",
+        "Email the City Council before the workshop",
+    )
+    exempt = {"index.html", "tank-farms.html"}
+    for name in html_files(docs):
+        if name in REDIRECT_PAGES or name in exempt:
+            continue
+        page = read(docs, name)
+        for phrase in invitations:
+            assert phrase not in page, f"{name}: past-event invitation {phrase!r}"

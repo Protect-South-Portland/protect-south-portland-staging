@@ -410,10 +410,10 @@ def test_row33_oct15_meeting_copy_published(docs):
     assert 'href="mailto:protectsouthportland@gmail.com">the email below</a>' in idx
     flyer = os.path.join(ROOT, "docs", "assets", "files", "tank-talk-flyer.pdf")
     assert os.path.exists(flyer), "the Tank Talk flyer must be mirrored into the built tree"
-    # meeting bullet sits above the Oct 27 workshop bullet (operator placement)
+    # meeting bullet sits above the workshop bullet (operator placement)
     callout_pos = idx.index("Now is the time to act")
     assert idx.index("Join neighbors on Thursday, Oct. 15", callout_pos) < \
-        idx.index("Make plans to come to the City Council workshop", callout_pos)
+        idx.index("The City Council took no vote at its Oct. 27 workshop", callout_pos)
     # the scan ban is retired: no event markers remain to reject it
     assert tuple(FORBIDDEN_EVENT_MARKERS) == ()
 
@@ -699,10 +699,11 @@ def test_embed_url_is_the_public_embedding(docs):
 
 
 def test_docx_action_dates_are_on_the_homepage(docs):
-    """The action dates from the docx must appear (sanity for row 5/6 copy)."""
+    """The Oct. 27 date survives as a past fact; the venue address left with
+    the invitation (operator ruling, 2026-11-05)."""
     idx = read(docs, "index.html")
     assert "Oct. 27" in idx
-    assert "637 Highland Ave" in idx
+    assert "637 Highland Ave" not in idx
 
 
 # ---- content-gap rewrite (Oct 13, 2026): homepage cut-down, archive page, ----
@@ -1522,19 +1523,39 @@ def test_act_now_past_tense_and_one_email_action(docs):
 def test_no_past_event_invitations(docs):
     # Sitewide guard, per the 2026-11-05 acceptance-criterion correction: the
     # date may appear where copy describes a past event, but no page may invite
-    # anyone to attend the Oct. 27 workshop. Two pages are exempt because their
-    # invitations are outside this row: index.html carries Mindy's Tier A banner
-    # and a workshop bullet (CTA audit §5 item 3), and tank-farms.html carries
-    # the same invitation in its workshop copy. Both need their own ruling.
+    # anyone to attend the Oct. 27 workshop. As of the operator's 2026-11-05
+    # ruling there are no exemptions: the homepage banner and bullets and the
+    # tank-farms note and bullets all moved to the live opening and the outcome ask.
     invitations = (
         "Make plans to come to the City Council workshop",
         "Attend the City Council workshop",
         "Email the City Council before the workshop",
     )
-    exempt = {"index.html", "tank-farms.html"}
     for name in html_files(docs):
-        if name in REDIRECT_PAGES or name in exempt:
+        if name in REDIRECT_PAGES:
             continue
         page = read(docs, name)
         for phrase in invitations:
             assert phrase not in page, f"{name}: past-event invitation {phrase!r}"
+
+
+def test_homepage_and_tank_farms_lead_with_the_next_workshop(docs):
+    # Operator ruling 2026-11-05: the banner and the duplicated callout bullets
+    # lead with the live fact and keep the ruling-B ask. The Oct. 27 date stays
+    # only where the copy describes the past workshop.
+    banner = ("The Council has not set a date for its next workshop. "
+              "Ask it to require better technology at the tank farms.")
+    bullet_state = ("The City Council took no vote at its Oct. 27 workshop and "
+                    "has not set a date for the next one.")
+    idx = read(docs, "index.html")
+    assert banner in idx
+    assert bullet_state in idx
+    assert "require better technology at the tank farms" in idx
+    assert "make public what special counsel advises" in idx
+    assert "637 Highland Ave" not in idx
+    tank = read(docs, "tank-farms.html")
+    assert bullet_state in tank
+    assert "require better technology at the tank farms" in tank
+    assert "make public what special counsel advises" in tank
+    assert "637 Highland Ave" not in tank
+    assert "email the Council now" in tank

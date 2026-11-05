@@ -790,9 +790,20 @@ def test_no_public_todo_strings(docs):
 
 def test_get_involved_current_ask_and_relocation(docs):
     gi = read(docs, "get-involved.html")
-    assert "Oct. 27" in gi and "637 Highland Ave" in gi
+    assert "Oct. 27" in gi
     assert PETITION_URL in gi
     assert "pressherald.com/contact/" in gi
+
+
+def test_get_involved_workshop_is_past_tense(docs):
+    # The Oct. 27 workshop happened. Both remaining invitations to attend it
+    # are factual corrections: state that it happened, point at the email
+    # action, and drop the high-school address that served only that night.
+    gi = read(docs, "get-involved.html")
+    assert gi.count("The City Council workshop was held on Oct. 27") == 2
+    assert "Make plans to come to the City Council workshop" not in gi
+    assert "Attend the City Council workshop" not in gi
+    assert "637 Highland Ave" not in gi
 
 
 def test_get_involved_odor_report_dual_channel(docs):

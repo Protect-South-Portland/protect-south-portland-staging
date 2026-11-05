@@ -1440,3 +1440,23 @@ def test_gate_report_writer_refuses_incomplete_verdicts(tmp_path):
         capture_output=True, text=True)
     assert proc.returncode != 0, proc.stdout
     assert "contact.html" in proc.stderr, proc.stderr
+
+
+def test_staging_gate_injects_static_stylesheet(tmp_path):
+    # 2026-11-04: the gate built its <style> element in JavaScript, filled it,
+    # and never appended it. The served head carried no stylesheet at all, so
+    # the curtain rendered as a static block at the end of the document, the
+    # body stayed readable, and the prompt's focused input scrolled the page
+    # to the footer. The rules must arrive as a real <style> tag in the served
+    # head, before any script runs.
+    tree = tmp_path / "gated"
+    tree.mkdir()
+    (tree / "index.html").write_text(
+        '<!DOCTYPE html><html lang="en"><head><title>x</title></head>'
+        "<body><p>hi</p></body></html>", encoding="utf-8")
+    assert publish.apply_staging_gate(str(tree), "phrase") == 1
+    text = (tree / "index.html").read_text(encoding="utf-8")
+    assert "<style>" in text, "served head must carry the gate rules as a real <style> tag"
+    assert ".staging-gate body{visibility:hidden!important}" in text
+    assert ".staging-gate-overlay{" in text
+    assert ".staging-gate-input{" in text

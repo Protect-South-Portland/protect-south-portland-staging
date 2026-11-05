@@ -116,9 +116,22 @@ def repo_pages_base(repo):
 
 
 # Row-42 gate, injected as ONE block right after every staged page's <head>:
-# the noindex meta + the deferred cookie-gate script. Plain prompt strings
-# per the commission; placeholder @HASH@ becomes the passphrase's digest.
+# the noindex meta, a static stylesheet that hides the page before any script
+# runs, and the cookie-gate script. The stylesheet is a real <style> tag: the
+# first version built it with createElement and never appended it, so the
+# curtain rendered unstyled and the body stayed readable (fixed 2026-11-04).
+# Placeholder @HASH@ becomes the passphrase's sha256 digest.
 GATE_HEAD_BLOCK = r'''<meta name="robots" content="noindex, nofollow">
+<style>
+.staging-gate body{visibility:hidden!important}
+.staging-gate-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:#122a2c;color:#e6f1f1;font:16px/1.5 'Segoe UI',system-ui,sans-serif}
+.staging-gate-card{background:#fff;color:#26383a;padding:22px 26px;border-radius:14px;max-width:22rem;box-shadow:0 2px 14px rgba(0,0,0,.35)}
+.staging-gate-title{margin:0 0 10px;font-weight:800;color:#1d3e40}
+.staging-gate-label{display:block;margin-bottom:6px;font-size:.85rem;color:#5c6b6d}
+.staging-gate-input{box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #dde8e8;border-radius:8px;font:inherit}
+.staging-gate-submit{margin-top:10px;padding:9px 16px;border:0;border-radius:999px;background:#b8401a;color:#fff;font-weight:800;cursor:pointer}
+.staging-gate-wrong{margin:8px 0 0;color:#b8401a;font-size:.85rem}
+</style>
 <script>
 (function () {
   /* Staging review gate (row 42): deterrence-grade, staging mirror only. */
@@ -126,21 +139,6 @@ GATE_HEAD_BLOCK = r'''<meta name="robots" content="noindex, nofollow">
   var COOKIE = "psp_staging";
   var docEl = document.documentElement;
   docEl.className += " staging-gate";
-  var style = document.createElement("style");
-  style.textContent =
-    ".staging-gate body{visibility:hidden!important}" +
-    ".staging-gate-overlay{position:fixed;inset:0;z-index:2147483647;display:flex;" +
-    "align-items:center;justify-content:center;background:#122a2c;color:#e6f1f1;" +
-    "font:16px/1.5 'Segoe UI',system-ui,sans-serif}" +
-    ".staging-gate-card{background:#fff;color:#26383a;padding:22px 26px;border-radius:14px;" +
-    "max-width:22rem;box-shadow:0 2px 14px rgba(0,0,0,.35)}" +
-    ".staging-gate-title{margin:0 0 10px;font-weight:800;color:#1d3e40}" +
-    ".staging-gate-label{display:block;margin-bottom:6px;font-size:.85rem;color:#5c6b6d}" +
-    ".staging-gate-input{box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #dde8e8;" +
-    "border-radius:8px;font:inherit}" +
-    ".staging-gate-submit{margin-top:10px;padding:9px 16px;border:0;border-radius:999px;" +
-    "background:#b8401a;color:#fff;font-weight:800;cursor:pointer}" +
-    ".staging-gate-wrong{margin:8px 0 0;color:#b8401a;font-size:.85rem}";
   function cookieValue() {
     var parts = document.cookie.split(/;\s*/);
     for (var i = 0; i < parts.length; i++) {

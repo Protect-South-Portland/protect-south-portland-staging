@@ -73,13 +73,12 @@ NAV_BODY = """
 </header>
 """
 
-# DATED: the "Next: City Council workshop" strip below comes out after the
-# Oct 27, 2026 workshop. To remove it: delete the dated-strip div here and the
-# .dated-strip block in site/styles.css. The marker lives in this Python
-# comment deliberately so the internal note never reaches the served HTML.
+# Ruling A (2026-11-05): the dated Oct. 27 workshop strip is retired. The
+# shared footer now carries the ruling's fallback call to action, linked to the
+# page that branches into both odor paths and the petition.
 FOOTER_BODY = """
-<div class="dated-strip" role="note">
-  <p>Next: City Council workshop - Tuesday, Oct. 27, 6 p.m., South Portland High School. <a href="act-now.html">Act now.</a></p>
+<div class="action-strip" role="note">
+  <p><a href="get-involved.html">Report every odor. Sign the petition.</a></p>
 </div>
 <footer class="footer">
   <div class="wrap footer__grid">

@@ -707,6 +707,9 @@ def test_docx_action_dates_are_on_the_homepage(docs):
 # ---- dated footer strip, dead-link sweep                                      ----
 
 DATED_PHRASE = "Next: City Council workshop - Tuesday, Oct. 27, 6 p.m., South Portland High School."
+# Ruling A (2026-11-05): the fallback call to action that replaces it in the
+# shared footer strip on every page.
+ACTION_PHRASE = "Report every odor. Sign the petition."
 # the internal DATED marker lives only in tools/build.py as a Python comment;
 # the served HTML must never carry it (release-gate rule 4, reviewer R1)
 DATED_COMMENT = "DATED: remove after 2026-10-27 workshop"
@@ -763,15 +766,21 @@ def test_act_now_in_header_nav(docs):
         assert m and 'href="act-now.html"' in m.group(0), name
 
 
-def test_dated_footer_strip_every_page(docs):
+def test_action_strip_every_page(docs):
+    # Ruling A (2026-11-05): the dated workshop strip is retired. The footer
+    # strip now carries the fallback call to action, linked to the page that
+    # branches into both odor paths and the petition.
     for name in html_files(docs):
         if name in REDIRECT_PAGES:
             continue
         page = read(docs, name)
-        assert DATED_PHRASE in page, name
+        assert DATED_PHRASE not in page, f"{name}: the retired Oct. 27 strip is still present"
+        assert ACTION_PHRASE in page, name
         assert DATED_COMMENT not in page, f"{name}: internal DATED comment leaked into served HTML"
-        assert 'class="dated-strip"' in page, name
-        assert re.search(r'<a href="act-now\.html">Act now\.</a>', page), name
+        assert 'class="action-strip"' in page, name
+        assert re.search(
+            r'<a href="get-involved\.html">Report every odor\. Sign the petition\.</a>',
+            page), name
 
 
 def test_no_public_todo_strings(docs):
@@ -1304,24 +1313,23 @@ def gate_source_pages():
     return sorted(n for n in os.listdir(pages_dir) if n.endswith(".html"))
 
 
-def gate_page_sha256(name):
-    path = os.path.join(ROOT, "site", "pages", name)
-    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+def gate_page_sha256(docs, name):
+    return hashlib.sha256(open(os.path.join(docs, name), "rb").read()).hexdigest()
 
 
-def gate_pages():
+def gate_pages(docs):
     return {
-        name: {"rounds": 1, "outcome": "pass", "sha256": gate_page_sha256(name)}
+        name: {"rounds": 1, "outcome": "pass", "sha256": gate_page_sha256(docs, name)}
         for name in gate_source_pages()
     }
 
 
-def write_gate_report(tmp_path, pages=None, drop=(), **overrides):
+def write_gate_report(tmp_path, docs, pages=None, drop=(), **overrides):
     report = {
         "date": "2026-11-04-test",
         "review_model": "synthetic/hf:zai-org/GLM-5.3",
         "review_class": "full",
-        "pages": gate_pages() if pages is None else pages,
+        "pages": gate_pages(docs) if pages is None else pages,
         "scope_note": "test fixture",
     }
     for key in drop:
@@ -1332,35 +1340,35 @@ def write_gate_report(tmp_path, pages=None, drop=(), **overrides):
     return path
 
 
-def test_gate_report_current_hashes_publish(tmp_path):
+def test_gate_report_current_hashes_publish(tmp_path, docs):
     # The legitimate case: every page carries the hash of the file as it
     # stands now, so the verdict travels with the content it reviewed.
-    path = write_gate_report(tmp_path)
+    path = write_gate_report(tmp_path, docs)
     model, review_class, per_page = publish.load_gate_report(str(path))
     assert "GLM-5.3" in model
     assert review_class == "full"
     assert per_page.count("r1") == len(gate_source_pages())
 
 
-def test_gate_report_refuses_page_hash_mismatch(tmp_path):
+def test_gate_report_refuses_page_hash_mismatch(tmp_path, docs):
     # A page edited after review must be refused by name, with both hashes.
-    pages = gate_pages()
+    pages = gate_pages(docs)
     pages["index.html"]["sha256"] = "0" * 64
-    path = write_gate_report(tmp_path, pages=pages)
+    path = write_gate_report(tmp_path, docs, pages=pages)
     with pytest.raises(SystemExit) as exc:
         publish.load_gate_report(str(path))
     message = str(exc.value)
     assert "index.html" in message, message
     assert "0" * 64 in message, message
-    assert gate_page_sha256("index.html") in message, message
+    assert gate_page_sha256(docs, "index.html") in message, message
 
 
-def test_gate_report_refuses_legacy_entry_without_hash(tmp_path):
+def test_gate_report_refuses_legacy_entry_without_hash(tmp_path, docs):
     # Legacy decision (option a): a missing hash is refused outright, never
     # trusted by default. Nothing can prove what was reviewed otherwise.
-    pages = gate_pages()
+    pages = gate_pages(docs)
     del pages["about.html"]["sha256"]
-    path = write_gate_report(tmp_path, pages=pages)
+    path = write_gate_report(tmp_path, docs, pages=pages)
     with pytest.raises(SystemExit) as exc:
         publish.load_gate_report(str(path))
     message = str(exc.value)
@@ -1368,8 +1376,8 @@ def test_gate_report_refuses_legacy_entry_without_hash(tmp_path):
     assert "sha256" in message, message
 
 
-def test_gate_report_refuses_flash_model(tmp_path):
-    path = write_gate_report(tmp_path, review_model="vendor/some-model-flash")
+def test_gate_report_refuses_flash_model(tmp_path, docs):
+    path = write_gate_report(tmp_path, docs, review_model="vendor/some-model-flash")
     with pytest.raises(SystemExit) as exc:
         publish.load_gate_report(str(path))
     message = str(exc.value)
@@ -1377,8 +1385,8 @@ def test_gate_report_refuses_flash_model(tmp_path):
     assert "flash" in message.lower(), message
 
 
-def test_gate_report_requires_review_class(tmp_path):
-    path = write_gate_report(tmp_path, drop=("review_class",))
+def test_gate_report_requires_review_class(tmp_path, docs):
+    path = write_gate_report(tmp_path, docs, drop=("review_class",))
     with pytest.raises(SystemExit) as exc:
         publish.load_gate_report(str(path))
     message = str(exc.value)
@@ -1386,8 +1394,8 @@ def test_gate_report_requires_review_class(tmp_path):
     assert "full" in message, message
 
 
-def test_gate_report_refuses_non_full_class(tmp_path):
-    path = write_gate_report(tmp_path, review_class="flash")
+def test_gate_report_refuses_non_full_class(tmp_path, docs):
+    path = write_gate_report(tmp_path, docs, review_class="flash")
     with pytest.raises(SystemExit) as exc:
         publish.load_gate_report(str(path))
     message = str(exc.value)
@@ -1395,7 +1403,7 @@ def test_gate_report_refuses_non_full_class(tmp_path):
     assert "full" in message, message
 
 
-def test_gate_report_writer_emits_publishable_report(tmp_path):
+def test_gate_report_writer_emits_publishable_report(tmp_path, docs):
     # The writer (tools/gate_report.py) is the only sanctioned way to make a
     # report now: it stamps current hashes and the class, and the publisher
     # accepts what it writes.
@@ -1417,11 +1425,11 @@ def test_gate_report_writer_emits_publishable_report(tmp_path):
         check=True, capture_output=True, text=True)
     report = json.loads(out.read_text())
     assert report["review_class"] == "full"
-    assert report["pages"]["index.html"]["sha256"] == gate_page_sha256("index.html")
+    assert report["pages"]["index.html"]["sha256"] == publish.page_sha256("index.html")
     publish.load_gate_report(str(out))
 
 
-def test_gate_report_writer_refuses_incomplete_verdicts(tmp_path):
+def test_gate_report_writer_refuses_incomplete_verdicts(tmp_path, docs):
     verdicts = {
         name: {"rounds": 1, "outcome": "pass"}
         for name in gate_source_pages()

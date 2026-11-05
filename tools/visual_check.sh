@@ -204,7 +204,7 @@ for (const W of widths) {
       const brect = brand ? brand.getBoundingClientRect() : null;
       const brandOverlap = [];
       if (brect) {
-        for (const c of document.querySelectorAll('.masthead > *, .footer, .dated-strip')) {
+        for (const c of document.querySelectorAll('.masthead > *, .footer, .action-strip')) {
           for (const el of c.querySelectorAll('*')) {
             if (brand.contains(el) || el.closest('.logo-link')) continue;
             const r = el.getBoundingClientRect();

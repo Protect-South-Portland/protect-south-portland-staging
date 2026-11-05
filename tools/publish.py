@@ -318,8 +318,11 @@ def run(cmd, cwd=ROOT):
 
 
 def page_sha256(name):
-    """sha256 of a page's source file — the content a verdict reviewed."""
-    with open(os.path.join(ROOT, "site", "pages", name), "rb") as fh:
+    """sha256 of a page's BUILT file — the content a verdict reviewed and the
+    content the mirror ships. Hashing the source page alone missed shared
+    chrome (the footer strip, injected by build.py), so a chrome-only change
+    could publish against stale verdicts."""
+    with open(os.path.join(ROOT, "docs", name), "rb") as fh:
         return hashlib.sha256(fh.read()).hexdigest()
 
 
@@ -819,7 +822,6 @@ def main():
     staging_gate_on = args.repo == STAGING_REPO and STAGING_GATE
     gate_passphrase = staging_passphrase() if staging_gate_on else None
 
-    review_model, review_class, per_page = load_gate_report(args.gate_report)
     require_clean_worktree()
     domain = args.domain
     if is_remote_target:
@@ -829,7 +831,11 @@ def main():
         domain = check_domain_stickiness(
             args.repo, args.domain, args.allow_domain_drop)
     assert_flag_agreement(domain, args.wait_https)
+    # Build BEFORE validating the gate report: the hashes cover the built
+    # pages, and the build is reproducible, so a stale report is refused by
+    # name instead of publishing content nobody reviewed.
     build_site()
+    review_model, review_class, per_page = load_gate_report(args.gate_report)
 
     staging = tempfile.mkdtemp(prefix="psp-publish-")
     gated = 0

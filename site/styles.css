@@ -589,20 +589,20 @@ blockquote {
 
 .card--photo .card__more { display: inline-block; padding-bottom: 12px; }
 
-/* ---------- dated next-event strip (DATED: remove after 2026-10-27 workshop) ---------- */
+/* ---------- footer action strip (ruling A, 2026-11-05) ---------- */
 
-.dated-strip {
+.action-strip {
   background: var(--cyan-soft);
   border-bottom: 1px solid var(--line);
   font-size: 0.92rem;
   color: var(--ink);
 }
 
-.dated-strip a { color: var(--orange-dark); font-weight: 800; }
+.action-strip a { color: var(--orange-dark); font-weight: 800; }
 
-.dated-strip a:hover { color: var(--orange); text-decoration: none; }
+.action-strip a:hover { color: var(--orange); text-decoration: none; }
 
-.dated-strip p {
+.action-strip p {
   margin: 0;
   padding: 10px 20px;
   text-align: center;

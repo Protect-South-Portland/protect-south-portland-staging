@@ -4,8 +4,8 @@
 The publisher refuses a report whose page hashes do not match the source
 files, and refuses a report that does not state a full-class reviewer. This
 tool makes producing such a report the easy path: it takes the reviewer's
-verdicts, stamps each page's current sha256, and validates exactly what
-publish.py will validate.
+verdicts, stamps each page's built sha256 (docs/<page>.html, the content the
+mirror ships), and validates exactly what publish.py will validate.
 
 Usage:
   python3 tools/gate_report.py \

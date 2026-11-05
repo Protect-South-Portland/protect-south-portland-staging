@@ -23,6 +23,7 @@ Builds site/pages into a temp dir via tools/build.py and pins the hard rules:
 
 import html
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -1286,3 +1287,156 @@ def test_heading_order_is_sequential(docs):
         for prev, cur in zip(levels, levels[1:]):
             assert cur <= prev + 1, (
                 f"{name}: heading level jumps h{prev} -> h{cur}; outline not sequential")
+
+
+# ---- gate report hardening (2026-11-04): content-addressed verdicts -------
+# The release gate used to validate coverage only: every page present, outcome
+# pass, rounds in range. A report whose own scope_note said it covered one
+# fixup therefore satisfied the gate for all sixteen pages, and any non-empty
+# review_model passed, including a flash variant. Two invariants now hold:
+# a page publishes only when the sha256 of its source file matches the reviewed
+# hash, and the report must state a full-class reviewer that is not a flash
+# model. These tests are the red-first record of both.
+
+
+def gate_source_pages():
+    pages_dir = os.path.join(ROOT, "site", "pages")
+    return sorted(n for n in os.listdir(pages_dir) if n.endswith(".html"))
+
+
+def gate_page_sha256(name):
+    path = os.path.join(ROOT, "site", "pages", name)
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def gate_pages():
+    return {
+        name: {"rounds": 1, "outcome": "pass", "sha256": gate_page_sha256(name)}
+        for name in gate_source_pages()
+    }
+
+
+def write_gate_report(tmp_path, pages=None, drop=(), **overrides):
+    report = {
+        "date": "2026-11-04-test",
+        "review_model": "synthetic/hf:zai-org/GLM-5.3",
+        "review_class": "full",
+        "pages": gate_pages() if pages is None else pages,
+        "scope_note": "test fixture",
+    }
+    for key in drop:
+        report.pop(key, None)
+    report.update(overrides)
+    path = tmp_path / "gate.json"
+    path.write_text(json.dumps(report))
+    return path
+
+
+def test_gate_report_current_hashes_publish(tmp_path):
+    # The legitimate case: every page carries the hash of the file as it
+    # stands now, so the verdict travels with the content it reviewed.
+    path = write_gate_report(tmp_path)
+    model, review_class, per_page = publish.load_gate_report(str(path))
+    assert "GLM-5.3" in model
+    assert review_class == "full"
+    assert per_page.count("r1") == len(gate_source_pages())
+
+
+def test_gate_report_refuses_page_hash_mismatch(tmp_path):
+    # A page edited after review must be refused by name, with both hashes.
+    pages = gate_pages()
+    pages["index.html"]["sha256"] = "0" * 64
+    path = write_gate_report(tmp_path, pages=pages)
+    with pytest.raises(SystemExit) as exc:
+        publish.load_gate_report(str(path))
+    message = str(exc.value)
+    assert "index.html" in message, message
+    assert "0" * 64 in message, message
+    assert gate_page_sha256("index.html") in message, message
+
+
+def test_gate_report_refuses_legacy_entry_without_hash(tmp_path):
+    # Legacy decision (option a): a missing hash is refused outright, never
+    # trusted by default. Nothing can prove what was reviewed otherwise.
+    pages = gate_pages()
+    del pages["about.html"]["sha256"]
+    path = write_gate_report(tmp_path, pages=pages)
+    with pytest.raises(SystemExit) as exc:
+        publish.load_gate_report(str(path))
+    message = str(exc.value)
+    assert "about.html" in message, message
+    assert "sha256" in message, message
+
+
+def test_gate_report_refuses_flash_model(tmp_path):
+    path = write_gate_report(tmp_path, review_model="vendor/some-model-flash")
+    with pytest.raises(SystemExit) as exc:
+        publish.load_gate_report(str(path))
+    message = str(exc.value)
+    assert "vendor/some-model-flash" in message, message
+    assert "flash" in message.lower(), message
+
+
+def test_gate_report_requires_review_class(tmp_path):
+    path = write_gate_report(tmp_path, drop=("review_class",))
+    with pytest.raises(SystemExit) as exc:
+        publish.load_gate_report(str(path))
+    message = str(exc.value)
+    assert "review_class" in message, message
+    assert "full" in message, message
+
+
+def test_gate_report_refuses_non_full_class(tmp_path):
+    path = write_gate_report(tmp_path, review_class="flash")
+    with pytest.raises(SystemExit) as exc:
+        publish.load_gate_report(str(path))
+    message = str(exc.value)
+    assert "flash" in message, message
+    assert "full" in message, message
+
+
+def test_gate_report_writer_emits_publishable_report(tmp_path):
+    # The writer (tools/gate_report.py) is the only sanctioned way to make a
+    # report now: it stamps current hashes and the class, and the publisher
+    # accepts what it writes.
+    verdicts = {
+        name: {"rounds": 1, "outcome": "pass"}
+        for name in gate_source_pages()
+    }
+    verdicts_path = tmp_path / "verdicts.json"
+    verdicts_path.write_text(json.dumps(verdicts))
+    out = tmp_path / "report.json"
+    subprocess.run(
+        [sys.executable, os.path.join(ROOT, "tools", "gate_report.py"),
+         "--date", "2026-11-04-1",
+         "--review-model", "synthetic/hf:zai-org/GLM-5.3",
+         "--review-class", "full",
+         "--verdicts", str(verdicts_path),
+         "--scope-note", "writer round trip",
+         "--out", str(out)],
+        check=True, capture_output=True, text=True)
+    report = json.loads(out.read_text())
+    assert report["review_class"] == "full"
+    assert report["pages"]["index.html"]["sha256"] == gate_page_sha256("index.html")
+    publish.load_gate_report(str(out))
+
+
+def test_gate_report_writer_refuses_incomplete_verdicts(tmp_path):
+    verdicts = {
+        name: {"rounds": 1, "outcome": "pass"}
+        for name in gate_source_pages()
+        if name != "contact.html"
+    }
+    verdicts_path = tmp_path / "verdicts.json"
+    verdicts_path.write_text(json.dumps(verdicts))
+    proc = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "tools", "gate_report.py"),
+         "--date", "2026-11-04-1",
+         "--review-model", "synthetic/hf:zai-org/GLM-5.3",
+         "--review-class", "full",
+         "--verdicts", str(verdicts_path),
+         "--scope-note", "incomplete",
+         "--out", str(tmp_path / "report.json")],
+        capture_output=True, text=True)
+    assert proc.returncode != 0, proc.stdout
+    assert "contact.html" in proc.stderr, proc.stderr

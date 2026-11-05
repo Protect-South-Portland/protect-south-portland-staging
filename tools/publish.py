@@ -14,11 +14,15 @@ per-page gate report (AGENTS.md "Public website release gate"):
 
     {"date": "2026-10-13",
      "review_model": "ollama-cloud/glm-5.3",
-     "pages": {"index.html": {"rounds": 1, "outcome": "pass"}, ...}}
+     "review_class": "full",
+     "pages": {"index.html": {"rounds": 1, "outcome": "pass",
+                              "sha256": "<sha256 of site/pages/index.html>"}}}
 
-Every page under site/pages/ must appear with outcome "pass" before
-anything is pushed; missing or failing pages abort loudly and the copy
-escalates to the operator instead of being published.
+Every page under site/pages/ must appear with outcome "pass", a rounds count
+in 0-3, and the sha256 of the file as it stands now; the report must state a
+full-class reviewer and must not name a flash model. Anything else aborts
+loudly and the copy escalates to the operator instead of being published.
+Write reports with tools/gate_report.py, which stamps the hashes for you.
 
 Usage:
   python3 tools/publish.py --gate-report ../gate-reports/<date>.json
@@ -88,6 +92,16 @@ ENV_NAME = "PSP_STAGING_PASSPHRASE"
 STAGING_DOTENV = os.path.join(os.path.dirname(ROOT), ".env")
 GATE_COOKIE = "psp_staging"
 GATE_MARKER = "staging-gate"
+
+# Row 57 (2026-11-04): content-addressed gate reports. A page entry carries
+# the sha256 of the source file it reviewed, so a verdict cannot outlive its
+# content; and the report states the reviewer class explicitly, so the flash
+# rule (AGENTS.md release gate) is enforced rather than trusted. The marker
+# list is open-ended on purpose: a model rename must not defeat the class
+# rule, and the class field is what actually gates.
+REVIEW_CLASSES = ("full",)
+FLASH_MARKERS = ("flash",)
+
 GATE_ROBOTS_TEXT = (
     "# Staging mirror variant — not the production site.\n"
     "User-agent: *\n"
@@ -301,36 +315,91 @@ def run(cmd, cwd=ROOT):
     return proc.stdout.strip()
 
 
+def page_sha256(name):
+    """sha256 of a page's source file — the content a verdict reviewed."""
+    with open(os.path.join(ROOT, "site", "pages", name), "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
 def load_gate_report(path):
-    """Validate the gate report and return (review_model, outcomes line)."""
+    """Validate the gate report and return (model, class, outcomes line).
+
+    Two invariants since 2026-11-04 (row 57), both fail-loud:
+
+    1. CONTENT-ADDRESSED VERDICTS. Every page entry carries the sha256 of the
+       source file it reviewed. A page publishes only when that hash matches
+       the file as it stands now, so a verdict cannot outlive its content. A
+       fixup-scoped report can no longer cover untouched pages, and a page
+       edited after review is refused by name. Legacy reports without hashes
+       are refused outright, not trusted by default: nothing can prove what
+       they reviewed.
+    2. REVIEWER CLASS. The report states review_class explicitly and it must
+       be "full"; a review_model carrying a flash marker is refused even when
+       the class field claims full. The model string alone is never trusted.
+    """
     raw = json.load(open(path, encoding="utf-8"))
-    model = raw.get("review_model", "").strip()
+    problems = []
+    model = raw.get("review_model")
+    model = model.strip() if isinstance(model, str) else ""
     if not model:
-        raise SystemExit(f"{path}: missing review_model")
+        problems.append(f"{path}: missing review_model")
+    review_class = raw.get("review_class")
+    review_class = review_class.strip().lower() if isinstance(review_class, str) else ""
+    if not review_class:
+        problems.append(
+            f"{path}: review_class missing — the release gate requires a "
+            f"full-class reviewer; add \"review_class\": \"full\"")
+    elif review_class not in REVIEW_CLASSES:
+        problems.append(
+            f"{path}: review_class {review_class!r} is not full — the release "
+            f"gate accepts only {', '.join(REVIEW_CLASSES)} (AGENTS.md "
+            "\"Public website release gate\")")
+    for marker in FLASH_MARKERS:
+        if marker in model.casefold():
+            problems.append(
+                f"{path}: review_model {model!r} carries the flash marker "
+                f"{marker!r} — flash variants never issue the verdict "
+                "(AGENTS.md release gate)")
     pages = raw.get("pages")
     if not isinstance(pages, dict) or not pages:
-        raise SystemExit(f"{path}: missing per-page outcomes")
-    bad = []
+        problems.append(f"{path}: missing per-page outcomes")
+        pages = {}
     for page in sorted(os.listdir(os.path.join(ROOT, "site", "pages"))):
         if not page.endswith(".html"):
             continue
         entry = pages.get(page)
         if not entry:
-            bad.append(f"{page}: NOT REVIEWED — absent from the gate report")
+            problems.append(f"{page}: NOT REVIEWED — absent from the gate report")
             continue
         outcome = str(entry.get("outcome", "")).strip().lower()
         rounds = entry.get("rounds")
         if outcome != "pass":
-            bad.append(f"{page}: outcome {outcome!r} — not published, escalate to the operator")
-        elif not isinstance(rounds, int) or not 0 <= rounds <= 3:
-            bad.append(f"{page}: rounds {rounds!r} outside 0-3")
-    if bad:
+            problems.append(
+                f"{page}: outcome {outcome!r} — not published, escalate to the operator")
+            continue
+        if not isinstance(rounds, int) or not 0 <= rounds <= 3:
+            problems.append(f"{page}: rounds {rounds!r} outside 0-3")
+            continue
+        reviewed = entry.get("sha256")
+        reviewed = reviewed.strip().lower() if isinstance(reviewed, str) else ""
+        if not reviewed:
+            problems.append(
+                f"{page}: no sha256 in the gate report — a content-addressed "
+                "verdict is required; re-review the page before publishing")
+            continue
+        current = page_sha256(page)
+        if reviewed != current:
+            problems.append(
+                f"{page}: sha256 mismatch — reviewed {reviewed}, current "
+                f"{current} (re-review the page or restore the reviewed content)")
+    if problems:
         raise SystemExit(
-            "gate failures — nothing is published:\n  " + "\n  ".join(bad))
+            "gate failures — nothing is published:\n  " + "\n  ".join(problems))
     per_page = ", ".join(
         f"{p} r{pages.get(p, {}).get('rounds', '?')}"
         for p in sorted(k for k in pages if k.endswith(".html")))
-    return model, per_page
+    return model, review_class, per_page
+
 
 
 def require_clean_worktree():
@@ -748,7 +817,7 @@ def main():
     staging_gate_on = args.repo == STAGING_REPO and STAGING_GATE
     gate_passphrase = staging_passphrase() if staging_gate_on else None
 
-    review_model, per_page = load_gate_report(args.gate_report)
+    review_model, review_class, per_page = load_gate_report(args.gate_report)
     require_clean_worktree()
     domain = args.domain
     if is_remote_target:
@@ -785,7 +854,8 @@ def main():
     message = (
         f"{subject}\n\n"
         f"Release gate (AGENTS.md): all pages passed the humanizer + style "
-        f"review on model {review_model}. Rounds to pass: {per_page}.\n"
+        f"review on model {review_model} (reviewer class {review_class}, "
+        f"content-addressed). Rounds to pass: {per_page}.\n"
         f"Snapshot: {snapshot}."
         + (f"\nStaging gate (row 42): {gated} pages gated." if staging_gate_on else "")
         + (f"\n{args.note}" if args.note else ""))
@@ -831,7 +901,7 @@ def main():
         print(f"LOCAL verification only — nothing pushed ({file_count} files, "
               f"removed stale: {sorted(removed) or 'none'})")
         print(f"commit {sha} in {mirror_dir}")
-        print(f"gate: {review_model}, pages: {per_page}")
+        print(f"gate: {review_model} ({review_class}), pages: {per_page}")
         print(f"snapshot: {snapshot}")
 
 

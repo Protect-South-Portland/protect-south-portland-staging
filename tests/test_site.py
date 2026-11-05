@@ -1460,3 +1460,6 @@ def test_staging_gate_injects_static_stylesheet(tmp_path):
     assert ".staging-gate body{visibility:hidden!important}" in text
     assert ".staging-gate-overlay{" in text
     assert ".staging-gate-input{" in text
+    # the embedded map iframe can take focus as it loads; the gate must take
+    # it back so a visitor can type the phrase without clicking
+    assert 'window.addEventListener("load"' in text

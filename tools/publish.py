@@ -199,6 +199,10 @@ GATE_HEAD_BLOCK = r'''<meta name="robots" content="noindex, nofollow">
         });
     });
     input.focus();
+    window.addEventListener("load", function () {
+      /* the embedded map iframe can take focus as it loads; take it back */
+      if (document.querySelector(".staging-gate-overlay")) input.focus();
+    });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();

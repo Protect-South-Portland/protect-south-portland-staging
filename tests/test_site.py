@@ -387,7 +387,8 @@ def test_row6_hero_replaced_and_act_now_landing(docs):
     act = read(docs, "act-now.html")
     assert "https://southportland.gov/411/City-Council" in act
     assert "require better technology at the tank farms" in act
-    assert "publish the legal opinion" in act
+    assert "make public what special counsel advises" in act
+    assert "legal opinion the city is waiting on" not in act
 
 
 def test_row33_oct15_meeting_copy_published(docs):
@@ -1497,7 +1498,8 @@ def test_act_now_past_tense_and_one_email_action(docs):
     assert "another workshop" in act
     assert "no date has been set" in act
     assert "require better technology at the tank farms" in act
-    assert "publish the legal opinion" in act
+    assert "make public what special counsel advises" in act
+    assert "legal opinion the city is waiting on" not in act
     assert "special counsel" in act
     # the invitation class: gone
     assert "Make plans to come to the City Council workshop" not in act

@@ -392,27 +392,22 @@ def test_row6_hero_replaced_and_act_now_landing(docs):
 
 
 def test_row33_oct15_meeting_copy_published(docs):
-    """Ledger row 33 (2026-10-15, Mindy-sanctioned, operator: publish today):
-    the Action-Oriented meeting bullet ships verbatim on the homepage callout
-    above the Oct 27 workshop bullet, with the QR-code link to the mirrored
-    flyer and the mailto anchor inside the verbatim parenthetical. Row 9's
-    scan ban on the event is retired — the marker list must be empty."""
+    """Ledger row 33 (2026-10-15) sanctioned this meeting bullet; the operator
+    directed the past-tense conversion on 2026-11-05 (the meeting happened).
+    It stays as history above the workshop bullet, without the event links."""
     idx = read(docs, "index.html")
-    bullet = ('<li><strong>Join neighbors on Thursday, Oct. 15 for a community meeting to '
+    bullet = ('<li><strong>Neighbors met on Thursday, Oct. 15 for a community meeting to '
               "share ideas, concerns, and stories:</strong> 5:30 p.m. food and "
-              "community; 6-7 p.m. discussion. First Congregational Church "
-              "UCC, 301 Cottage Road. (RSVPs are great/not required \u2013 use "
-              '<a href="assets/files/tank-talk-flyer.pdf">the QR code</a> or '
-              '<a href="mailto:protectsouthportland@gmail.com">the email below</a>.) '
-              "Kids welcome.</li>")
-    assert bullet in idx, "sanctioned meeting bullet must be verbatim (en dash included; links are render-only)"
-    assert 'href="assets/files/tank-talk-flyer.pdf"' in idx, "the QR code must link the flyer"
-    assert 'href="mailto:protectsouthportland@gmail.com">the email below</a>' in idx
+              "community; 6-7 p.m. discussion, at First Congregational Church "
+              "UCC, 301 Cottage Road. Kids were welcome.</li>")
+    assert bullet in idx, "the past-tense meeting bullet must ship"
+    assert "Join neighbors on Thursday, Oct. 15" not in idx, "the invitation form is retired"
+    assert 'href="assets/files/tank-talk-flyer.pdf"' not in idx, "the event-only flyer link is dropped"
     flyer = os.path.join(ROOT, "docs", "assets", "files", "tank-talk-flyer.pdf")
-    assert os.path.exists(flyer), "the Tank Talk flyer must be mirrored into the built tree"
+    assert os.path.exists(flyer), "the Tank Talk flyer stays archived in the built tree"
     # meeting bullet sits above the workshop bullet (operator placement)
     callout_pos = idx.index("Now is the time to act")
-    assert idx.index("Join neighbors on Thursday, Oct. 15", callout_pos) < \
+    assert idx.index("Neighbors met on Thursday, Oct. 15", callout_pos) < \
         idx.index("The City Council took no vote at its Oct. 27 workshop", callout_pos)
     # the scan ban is retired: no event markers remain to reject it
     assert tuple(FORBIDDEN_EVENT_MARKERS) == ()
@@ -1487,80 +1482,52 @@ def test_staging_gate_injects_static_stylesheet(tmp_path):
     assert 'window.addEventListener("load"' in text
 
 
-def test_act_now_past_tense_and_one_email_action(docs):
-    # Ruling B (2026-11-05): the page asks for the outcome, not an instrument.
-    # The Oct. 27 workshop happened, so the opener states it and the page
-    # carries one real email-the-Council action. "Oct. 27" itself stays: the
-    # date describes a past event. What must be gone is every invitation to
-    # attend it. Never pin the date string's absence.
-    act = read(docs, "act-now.html")
-    assert "The City Council workshop was held on Oct. 27" in act
-    assert "took no vote" in act
-    assert "another workshop" in act
-    assert "no date has been set" in act
-    assert "require better technology at the tank farms" in act
-    assert "make public what special counsel advises" in act
-    assert "legal opinion the city is waiting on" not in act
-    assert "special counsel" in act
-    # the invitation class: gone
-    assert "Make plans to come to the City Council workshop" not in act
-    assert "before the workshop" not in act
-    assert "637 Highland Ave" not in act
-    # the rejected instrument: not named, not implied
-    assert "municipal license" not in act
-    assert "license the tank farms" not in act
-    assert "pressure the DEP to use the existing licensing process" not in act
-    # one real action: general address plus the seven councilors, prefilled subject
-    m = re.search(r'href="(mailto:citycouncil@southportland\.gov\?cc=[^"]+subject=[^"]+)"', act)
-    assert m, "act-now.html must carry one prefilled email-the-Council mailto action"
-    for _, _, alias in ROW47_COUNCILORS:
-        assert f"{alias}%40southportland.gov" in m.group(1), alias
-    # the ready-to-send message and the roster still ship
-    assert "Dear Councilors," in act
-    assert "citycouncil@southportland.gov" in act
+DATE_TOKEN = re.compile(
+    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b", re.I)
+INVITE_VERB = re.compile(
+    r"\b(join|come|attend|make plans|be there|rsvp|meet us|gather)\b", re.I)
+PAST_MARKER = re.compile(
+    r"\b(met|was held|were held|took no vote|has not set|no date|happened|held on|took place)\b",
+    re.I)
 
 
-INVITE_VERBS = re.compile(
-    r"\b(come|attend|join|make plans|be there|rsvp|before the workshop|at the workshop)\b")
+def past_event_invitations(page):
+    """Sentences that invite attendance at an event that already happened.
 
-
-def past_workshop_invitations(page):
-    """Sentences that invite attendance at a specific workshop.
-
-    Rule-based, not a phrase list: a sentence flags when it names a specific
-    workshop (a date, or "the ... workshop") and either carries an invitation
-    verb or a date, unless it also carries a past or open marker. That catches
-    verb variants ("come to", "attend", "join") and date-first phrasings
-    ("workshop on Tuesday, Oct. 27") that a list would miss, while leaving
-    past-tense reports and the undated next workshop alone.
+    Rule-based, not a phrase list. Two shapes flag: any past-dated event that
+    carries an imperative to attend, and a specific workshop that carries an
+    invitation or a deadline. A sentence with a past or open marker
+    ("met", "was held", "took no vote", "has not set", "no date") reports the
+    record and never flags. The rule fails toward catching too much.
     """
     text = html.unescape(re.sub(r"<[^>]+>", " ", page))
     text = re.sub(r"\s+", " ", text)
     hits = []
-    for sentence in re.split(r"(?<=[.!?])\s+", text):
+    for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z])", text):
         low = sentence.lower()
-        if "workshop" not in low:
-            continue
-        if any(m in low for m in ("was held", "took no vote", "has not set", "no date", "held on")):
-            continue
-        specific = re.search(r"\b(oct\.?\s*27|tuesday)\b", low) or re.search(
-            r"\bthe\s+(city council\s+)?workshop\b", low)
-        if not specific:
-            continue
-        if INVITE_VERBS.search(low) or re.search(r"\b(oct\.?\s*27|tuesday)\b", low):
+        dated = DATE_TOKEN.search(low)
+        invite = INVITE_VERB.search(low)
+        past = PAST_MARKER.search(low)
+        if dated and invite and not past:
             hits.append(sentence.strip()[:180])
+            continue
+        if "workshop" in low and not past:
+            specific = (dated or re.search(r"\bthe\s+(city council\s+)?workshop\b", low)
+                        or "before the workshop" in low or "at the workshop" in low)
+            if specific and invite:
+                hits.append(sentence.strip()[:180])
     return hits
 
 
 def test_no_past_event_invitations(docs):
-    # The date may appear where copy describes a past event; no page may invite
-    # anyone to attend a specific workshop. Rule-based so a new verb or a
-    # date-first phrasing cannot slip past an exact-string list.
+    # No page may invite anyone to an event that already happened. Rule-based
+    # so a new verb, a new event name or a date-first phrasing cannot slip past
+    # an exact-string list; past-tense reports are allowed.
     for name in html_files(docs):
         if name in REDIRECT_PAGES:
             continue
-        hits = past_workshop_invitations(read(docs, name))
-        assert not hits, f"{name}: retired workshop invitation: {hits}"
+        hits = past_event_invitations(read(docs, name))
+        assert not hits, f"{name}: past-event invitation: {hits}"
 
 
 def test_act_now_past_tense_and_one_email_action(docs):
@@ -1594,27 +1561,6 @@ def test_act_now_past_tense_and_one_email_action(docs):
     # the ready-to-send message and the roster still ship
     assert "Dear Councilors," in act
     assert "citycouncil@southportland.gov" in act
-
-
-def test_no_past_event_invitations(docs):
-    # Sitewide guard, per the 2026-11-05 acceptance-criterion correction: the
-    # date may appear where copy describes a past event, but no page may invite
-    # anyone to attend the Oct. 27 workshop. As of the operator's 2026-11-05
-    # ruling there are no exemptions: the homepage banner and bullets and the
-    # tank-farms note and bullets all moved to the live opening and the outcome ask.
-    invitations = (
-        "Make plans to come to the City Council workshop",
-        "Attend the City Council workshop",
-        "Email the City Council before the workshop",
-        "Come to the City Council workshop",
-        "workshop on Tuesday, Oct. 27",
-    )
-    for name in html_files(docs):
-        if name in REDIRECT_PAGES:
-            continue
-        page = read(docs, name)
-        for phrase in invitations:
-            assert phrase not in page, f"{name}: past-event invitation {phrase!r}"
 
 
 def test_homepage_and_tank_farms_lead_with_the_next_workshop(docs):

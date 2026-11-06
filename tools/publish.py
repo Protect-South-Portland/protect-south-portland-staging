@@ -771,11 +771,57 @@ def enforce_https(repo, minutes=60, clock=time.time, pause=time.sleep):
         pause(30)
 
 
+CHANGELOG_LT = "thr_6sf5hk9f4m"
+
+
+def resolve_changelog_handoff(handoff, waiver):
+    """Rung 2b: a publish cannot proceed on a silent skip; it can proceed on a
+    recorded one. Returns the line that goes into the publish commit.
+
+    The handoff is required by default (runbook rung 2b). A waiver is a written
+    statement naming what was not captured, and the same text belongs in the
+    ledger row for the publish. Refusing here is deliberate: the ladder says the
+    changelog is what a reader sees, so skipping it has to leave a trace.
+    """
+    handoff = (handoff or "").strip()
+    waiver = (waiver or "").strip()
+    if handoff and waiver:
+        raise SystemExit(
+            "publish: give either --changelog-handoff or --changelog-waiver, "
+            "not both — the commit would record two contradictory statements")
+    if handoff:
+        return f"Changelog handoff (rung 2b): {handoff}"
+    if waiver:
+        if len(waiver.split()) < 4:
+            raise SystemExit(
+                "publish: a changelog waiver must name what was not captured; "
+                f"{waiver!r} does not. Say which pages or captures are missing "
+                "and why, and put the same text in the ledger row.")
+        return f"Changelog handoff waived (rung 2b): {waiver}"
+    raise SystemExit(
+        "publish: rung 2b — the changelog handoff is required by default.\n"
+        f"  Notify the changelog lieutenant ({CHANGELOG_LT}) with the commit, "
+        "the changed pages and the gate report, then pass\n"
+        "    --changelog-handoff <what it recorded>\n"
+        "  If the handoff cannot happen, pass\n"
+        "    --changelog-waiver \"<what was not captured, and why>\"\n"
+        "  and put the same text in the ledger row for this publish. A publish "
+        "may skip the handoff in writing, never silently.")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description="Publish the public mirror (gate report mandatory).")
     parser.add_argument("--gate-report", required=True,
                         help="JSON file with the reviewer's per-page outcomes")
+    parser.add_argument("--changelog-handoff", default=None, metavar="REF",
+                        help="what the changelog lieutenant recorded for this "
+                             "cycle (entry, capture set or artifact ref); "
+                             "required by default — see rung 2b in the runbook")
+    parser.add_argument("--changelog-waiver", default=None, metavar="TEXT",
+                        help="written waiver for publishing without the "
+                             "handoff; must name what was not captured, and the "
+                             "same text belongs in the ledger row")
     parser.add_argument("--subject", default=None,
                         help="commit subject override (default: 'Publish <today>'; "
                              "a same-day republish keeps the original subject)")
@@ -812,6 +858,10 @@ def build_parser():
 
 def main():
     args = build_parser().parse_args()
+    # Rung 2b runs before any real work, so a silent skip cannot get as far as
+    # a build or a push.
+    changelog_line = resolve_changelog_handoff(
+        args.changelog_handoff, args.changelog_waiver)
     mirror_dir = args.mirror_dir or default_mirror_dir(args.repo)
     is_remote_target = os.path.abspath(
         mirror_dir) == os.path.abspath(default_mirror_dir(args.repo))
@@ -866,6 +916,7 @@ def main():
         f"content-addressed). Rounds to pass: {per_page}.\n"
         f"Snapshot: {snapshot}."
         + (f"\nStaging gate (row 42): {gated} pages gated." if staging_gate_on else "")
+        + f"\n{changelog_line}"
         + (f"\n{args.note}" if args.note else ""))
 
     if is_remote_target:

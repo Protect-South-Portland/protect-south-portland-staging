@@ -1657,6 +1657,32 @@ def test_punchlist_a1_history_moved_not_deleted(docs):
     assert tank.index("Now is the time to act") < tank.index("120 large petroleum tanks")
 
 
+def test_archive_page_carries_one_standing_note(docs):
+    # Operator ruling, 2026-11-06: the archive keeps superseded figures verbatim.
+    # No inline correction and no footnote on the sentence itself. Instead the
+    # page carries one standing note above the record, saying what the page is,
+    # and linking to the current numbers on tank-farms.html.
+    page = read(docs, "tank-farms-history.html")
+    assert "An archive, not a snapshot." in page
+    assert "superseded" in page
+    assert 'href="tank-farms.html"' in page
+    note = page.index("An archive, not a snapshot.")
+    first_record = page.index("Background: EPA and Global Partners in court")
+    assert note < first_record, "the standing note must sit above the record"
+    assert page.count("An archive, not a snapshot.") == 1
+    # the ruling is not an inline annotation: the superseded figure itself is
+    # untouched, and it survives exactly once in the built tree
+    assert "600 tons" in page
+    built = []
+    for root, _dirs, files in os.walk(docs):
+        for name in files:
+            if name.endswith(".html"):
+                with open(os.path.join(root, name), encoding="utf-8") as f:
+                    built.append(f.read())
+    occurrences = sum(text.count("600 tons") for text in built)
+    assert occurrences == 1, f"expected one verbatim 600-ton figure, found {occurrences}"
+
+
 def test_punchlist_a4_press_kit(docs):
     # Nov. 6 defect fix: the permitted 600-ton VOC / 104-ton HAP cap is NOT on
     # this page. The campaign's own CTA audit (psp/cta-audit-2026-11-02.md, s3)

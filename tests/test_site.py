@@ -1664,7 +1664,8 @@ def test_archive_page_carries_one_standing_note(docs):
     # and linking to the current numbers on tank-farms.html.
     page = read(docs, "tank-farms-history.html")
     assert "An archive, not a snapshot." in page
-    assert "superseded" in page
+    assert "Some figures in it are now out of date." in page
+    assert "superseded" not in page
     assert 'href="tank-farms.html"' in page
     note = page.index("An archive, not a snapshot.")
     first_record = page.index("Background: EPA and Global Partners in court")

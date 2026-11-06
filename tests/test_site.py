@@ -112,6 +112,33 @@ def html_files(docs):
     return sorted(n for n in os.listdir(docs) if n.endswith(".html"))
 
 
+def test_fragments_survive_the_build_structurally(docs):
+    """A page fragment is copied into the chrome, never converted, so every
+    class token, figure and iframe in the source must exist in the built page.
+
+    This exists because the Pages CMS assessment (Nov 6) showed the converse: a
+    rich-text round trip stripped 223 class attributes down to 16, flattened
+    every card grid and dropped both iframes, and the whole suite still passed,
+    because no pin looked at structure. Copy is reviewed; structure was not.
+    """
+    pages_dir = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "site", "pages")
+    for name in sorted(os.listdir(pages_dir)):
+        if not name.endswith(".html"):
+            continue
+        source = open(os.path.join(pages_dir, name), encoding="utf-8").read()
+        built_path = os.path.join(docs, name)
+        if not os.path.exists(built_path):
+            continue
+        built = open(built_path, encoding="utf-8").read()
+        for cls in set(re.findall(r'class="([^"]+)"', source)):
+            assert built.count(f'class="{cls}"') >= source.count(f'class="{cls}"'), (
+                f"{name}: the build lost class=\"{cls}\"")
+        for tag in ("figure", "iframe", "table"):
+            assert built.count(f"<{tag}") >= source.count(f"<{tag}"), (
+                f"{name}: the build lost a <{tag}> element")
+
+
 def test_expected_pages_built(docs):
     names = html_files(docs)
     for expected in (

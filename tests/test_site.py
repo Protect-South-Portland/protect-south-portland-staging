@@ -599,9 +599,9 @@ def test_donate_page_has_one_paypal_path(docs):
 def test_sprague_complaint_asset_mirrored(docs):
     """RED-1 (wix-vs-staging-comparison.md): the DOJ complaint document the
     live Wix /global page links ("Read the complaint>>") is mirrored into
-    site/assets/files/ and anchored from the Sprague paragraph on
-    tank-farms.html, so it survives Wix going dark."""
-    tf = read(docs, "tank-farms.html")
+    site/assets/files/ and anchored from the Sprague paragraph, which moved
+    to tank-farms-history.html in the Nov. 2026 cut, so it survives Wix going dark."""
+    tf = read(docs, "tank-farms-history.html")
     assert "Read the complaint (PDF)" in tf, "anchor text missing"
     hrefs = re.findall(r'href="(assets/files/[^"]*\.pdf)"', tf)
     sprague = [h for h in hrefs if "sprague-doj-complaint" in h]
@@ -917,8 +917,9 @@ def test_where_things_stand_section(docs):
     assert "southportland.gov/522/Air-Quality-Concerns-Monitoring" in ot
     assert "DocumentCenter/View/5116" in ot
     assert "DocumentCenter/View/4819" in ot
-    assert "spo-voc-monitor.html" in ot
     assert "fence-line data" in ot
+    # the DEP findings paragraph moved to the history page with the rest of the run
+    assert "spo-voc-monitor.html" in read(docs, "tank-farms-history.html")
 
 
 def test_wix_pdfs_mirrored_locally(docs):
@@ -1593,3 +1594,84 @@ def test_about_workshop_is_past_tense(docs):
     assert "The Council took no vote at its Oct. 27 workshop" in about
     assert "Come to the City Council workshop" not in about
     assert "637 Highland Ave" not in about
+
+
+def test_punchlist_a5_campaign_card_is_current(docs):
+    # Nov. 5 meeting, A5: the tank card described the Oct. 27 workshop in the
+    # present tense. The campaign page now points at the standing status.
+    page = read(docs, "our-campaigns.html")
+    assert "where the campaign stands" in page
+    assert "Oct. 27 City Council workshop" not in page
+
+
+def test_punchlist_a2_a3_library_page(docs):
+    # Nov. 5 meeting, A2 and A3: a library landing page with an entry rule, the
+    # current work, the served documents, a white-papers block and the archive.
+    page = read(docs, "library.html")
+    assert "Resource library" in page
+    assert "What qualifies:" in page
+    for heading in ("Start here", "Reference documents", "White papers", "Archive"):
+        assert heading in page, heading
+    assert 'href="tank-farms.html"' in page
+    assert 'href="coastal-flooding.html"' in page
+    assert 'href="act-now.html"' in page
+    assert 'href="past-work.html"' in page
+    assert 'href="tank-farms-history.html"' in page
+    # reference documents: every served PDF except the event flyer is listed
+    for name in ("maine-dep-report-ld1915.pdf", "psp-submission-enr.pdf",
+                 "falatko-comments.pdf", "mikulka-comments.pdf",
+                 "sprague-doj-complaint.pdf", "clear-skies-ordinance-2014.pdf",
+                 "fertilizer-ordinance-2020.pdf", "pesticide-ordinance-ch32.pdf",
+                 "pesticide-ordinance-faqs.pdf", "newsletter-2020-12-13.pdf",
+                 "newsletter-2021-01-13.pdf"):
+        assert f"assets/files/{name}" in page, name
+    # A3: the HEM-3 summary is labeled as a summary, not a designed white paper
+    assert "hem3-report-summary.pdf" in page
+    assert "18-page summary" in page
+    assert "white paper" not in page.lower() or "White papers" in page
+
+
+def test_punchlist_a1_history_moved_not_deleted(docs):
+    # A1: the background run left tank-farms and lives on the history page.
+    tank = read(docs, "tank-farms.html")
+    history = read(docs, "tank-farms-history.html")
+    moved = ("Background: EPA and Global Partners in court", "Selected reading",
+             "EPA action", "Protect South Portland&rsquo;s role",
+             "Clean Air Advisory Committee", "DEP air quality findings",
+             "Resolve LD 1915", "Reference documents", "LD 163", "Rulemaking",
+             "LD 71", "Media coverage")
+    for heading in moved:
+        assert heading in history, f"history page missing {heading}"
+        assert heading not in tank, f"tank-farms still carries {heading}"
+    # the spine stays on the campaign page
+    assert "120 large petroleum tanks" in tank
+    assert "Health effects of VOCs" in tank
+    assert "Cancer risk" in tank
+    assert 'href="tank-farms-history.html"' in tank
+    # the action callout sits above the fold, not after the history run
+    assert tank.index("Now is the time to act") < tank.index("120 large petroleum tanks")
+
+
+def test_punchlist_a4_press_kit(docs):
+    page = read(docs, "press.html")
+    assert "Press kit" in page
+    assert "120 large petroleum tanks" in page
+    assert "12 times" in page
+    assert "600 tons" in page and "104 tons" in page
+    assert "southportland.gov/522/Air-Quality-Concerns-Monitoring" in page
+    assert "maine.gov/dep/air/monitoring/spo-voc-monitor.html" in page
+    assert 'href="library.html"' in page
+    assert 'href="mailto:protectsouthportland@gmail.com"' in page
+
+
+def test_punchlist_new_pages_in_nav_and_footer(docs):
+    for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue
+        page = read(docs, name)
+        nav = re.search(r'<nav class="main-nav".*?</nav>', page, re.S).group(0)
+        assert 'href="library.html"' in nav, f"{name}: library missing from nav"
+        assert 'href="press.html"' in nav, f"{name}: press missing from nav"
+        footer = page[page.index('class="footer'):]
+        assert 'href="library.html"' in footer, f"{name}: library missing from footer"
+        assert 'href="press.html"' in footer, f"{name}: press missing from footer"

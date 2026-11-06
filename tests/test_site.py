@@ -1610,6 +1610,11 @@ def test_punchlist_a2_a3_library_page(docs):
     page = read(docs, "library.html")
     assert "Resource library" in page
     assert "What qualifies:" in page
+    # Nov. 6 defect fix: the rule and the list must agree. The list carries the
+    # two newsletter PDFs, which are campaign publications rather than filings,
+    # so the rule names campaign publications explicitly.
+    assert "campaign publication" in page
+    assert "newsletter-2020-12-13.pdf" in page
     for heading in ("Start here", "Reference documents", "White papers", "Archive"):
         assert heading in page, heading
     assert 'href="tank-farms.html"' in page
@@ -1653,11 +1658,19 @@ def test_punchlist_a1_history_moved_not_deleted(docs):
 
 
 def test_punchlist_a4_press_kit(docs):
+    # Nov. 6 defect fix: the permitted 600-ton VOC / 104-ton HAP cap is NOT on
+    # this page. The campaign's own CTA audit (psp/cta-audit-2026-11-02.md, s3)
+    # says the cap cannot be published without the actual-emissions annotation,
+    # and that annotation is a new assertion needing operator and original-author
+    # sign-off plus a check on the mayor's 550 figure. A press kit is the page a
+    # reporter checks first, so the cap stays off until that sign-off exists.
+    # Do not re-add it here without the annotation and the sign-off.
     page = read(docs, "press.html")
     assert "Press kit" in page
     assert "120 large petroleum tanks" in page
     assert "12 times" in page
-    assert "600 tons" in page and "104 tons" in page
+    assert "600 tons" not in page
+    assert "104 tons" not in page
     assert "southportland.gov/522/Air-Quality-Concerns-Monitoring" in page
     assert "maine.gov/dep/air/monitoring/spo-voc-monitor.html" in page
     assert 'href="library.html"' in page

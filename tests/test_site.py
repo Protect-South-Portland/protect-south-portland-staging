@@ -146,7 +146,7 @@ def test_expected_pages_built(docs):
         "coastal-flooding.html", "yard-south-proposal.html", "oil-tank-emissions.html",
         "clear-skies.html", "fertilizer-ban.html", "pesticides.html", "vocs.html",
         "newsletter.html", "get-involved.html", "donate.html", "contact.html",
-        "404.html", "past-work.html", "tank-farms.html",
+        "404.html", "past-work.html", "tank-farms.html", "share-your-story.html",
     ):
         assert expected in names, expected
     assert "styles.css" in os.listdir(docs)
@@ -167,6 +167,43 @@ def test_merged_redirects(docs):
     for name in REDIRECT_PAGES:
         page = read(docs, name)
         assert 'class="masthead"' not in page and len(page) < 800, name
+
+
+def test_share_your_story_page(docs):
+    """The voice-memo page (PSP Comms Team doc, 2026-11-20): an invitation to
+    leave a recording ahead of the Dec. 1 workshop.
+
+    Two things matter here beyond the copy. The consent sentence is a promise
+    about what happens to a stranger's recording, so it must ship verbatim. And
+    the phone number does not exist yet, so the page carries a visible
+    placeholder instead of a dead tel: link, and the nav does not offer a page
+    whose only action is missing.
+    """
+    page = read(docs, "share-your-story.html")
+    # the invitation, and the date it serves
+    assert "We want to hear your voice" in page
+    assert "Dec. 1" in page
+    # consent: permission to publish, stated plainly, plus the newsletter route
+    assert ("you are giving Protect South Portland permission to share any part "
+            "of your recording") in page
+    assert "newsletter" in page
+    # three-minute cap and the call-more-than-once answer
+    assert "three minutes" in page
+    assert "more than once" in page
+    # prompts, and the optional image route
+    assert "I remember" in page
+    assert "optional image" in page.lower()
+    assert "protectsouthportland@gmail.com" in page
+    # the number is not yet assigned: placeholder visible, no dead tel link
+    assert "placeholder-block" in page
+    assert "tel:" not in page, "a tel: link must not ship before the number exists"
+    # reachable from the pages where a reader is deciding to act, but not nav
+    assert 'href="share-your-story.html"' in read(docs, "get-involved.html")
+    assert 'href="share-your-story.html"' in read(docs, "contact.html")
+    nav = re.search(r'<nav class="main-nav".*?</nav>',
+                    read(docs, "index.html"), re.S).group(0)
+    assert "share-your-story.html" not in nav, (
+        "the nav must not offer a page whose only action is not yet live")
 
 
 def test_nav_structure_after_split(docs):

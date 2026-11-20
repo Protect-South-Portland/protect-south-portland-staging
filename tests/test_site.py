@@ -1608,9 +1608,10 @@ def test_act_now_past_tense_and_one_email_action(docs):
     act = read(docs, "act-now.html")
     assert "The City Council workshop was held on Oct. 27" in act
     assert "took no vote" in act
-    # 2026-11-20: a date now exists, so "another workshop" alone no longer
-    # describes the state. Pin the outcome: the next workshop and its date.
-    assert "another workshop" in act
+    # 2026-11-20: a date now exists, so the opener states the outcome: the
+    # options the Council asked for return at the planned Dec. 1 workshop.
+    # "another workshop" was retired by the reviewer as a doubled sentence.
+    assert "the options it asked for return" in act
     assert "Dec. 1" in act
     assert "no date has been set" not in act
     assert "require better technology at the tank farms" in act

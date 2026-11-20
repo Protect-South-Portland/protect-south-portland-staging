@@ -821,9 +821,11 @@ def test_get_involved_current_ask_and_relocation(docs):
 
 
 def test_get_involved_workshop_is_past_tense(docs):
-    # The Oct. 27 workshop happened. Both remaining invitations to attend it
-    # are factual corrections: state that it happened, point at the email
-    # action, and drop the high-school address that served only that night.
+    # The Oct. 27 workshop happened. Both mentions state that it happened and
+    # point at the email action, and the high-school address that served only
+    # that night stays gone. 2026-11-20: the second mention now also carries the
+    # next date, so it is pinned by its past-tense opener, not by a count of the
+    # full retired sentence (which the live fact legitimately extends).
     gi = read(docs, "get-involved.html")
     assert gi.count("The City Council workshop was held on Oct. 27") == 2
     assert "Make plans to come to the City Council workshop" not in gi
@@ -940,7 +942,9 @@ def test_about_tense_fixes(docs):
 
 def test_where_things_stand_section(docs):
     ot = read(docs, "tank-farms.html")
-    assert "Where things stand &mdash; October 2026" in ot
+    # 2026-11-20: the state's analysis published, so the heading advances. The
+    # section keeps its anchors and its citation links either way.
+    assert "Where things stand &mdash; November 2026" in ot
     assert "southportland.gov/522/Air-Quality-Concerns-Monitoring" in ot
     assert "DocumentCenter/View/5116" in ot
     assert "DocumentCenter/View/4819" in ot
@@ -1567,8 +1571,11 @@ def test_act_now_past_tense_and_one_email_action(docs):
     act = read(docs, "act-now.html")
     assert "The City Council workshop was held on Oct. 27" in act
     assert "took no vote" in act
+    # 2026-11-20: a date now exists, so "another workshop" alone no longer
+    # describes the state. Pin the outcome: the next workshop and its date.
     assert "another workshop" in act
-    assert "no date has been set" in act
+    assert "Dec. 1" in act
+    assert "no date has been set" not in act
     assert "require better technology at the tank farms" in act
     assert "make public what special counsel advises" in act
     assert "legal opinion the city is waiting on" not in act
@@ -1595,13 +1602,19 @@ def test_homepage_and_tank_farms_lead_with_the_next_workshop(docs):
     # Operator ruling 2026-11-05: the banner and the duplicated callout bullets
     # lead with the live fact and keep the ruling-B ask. The Oct. 27 date stays
     # only where the copy describes the past workshop.
-    banner = ("The Council has not set a date for its next workshop. "
-              "Ask it to require better technology at the tank farms.")
-    bullet_state = ("The City Council took no vote at its Oct. 27 workshop and "
-                    "has not set a date for the next one.")
+    # 2026-11-20: the live fact changed from "no date set" to the Dec. 1
+    # workshop, so the pinned banner text moves with it. The rule is unchanged:
+    # lead with what is true now, keep the ask, never an invitation to the past.
+    banner = ("The Council plans its next workshop on tank emissions for "
+              "Tuesday, Dec. 1 at 6:30 p.m. Ask it to require better technology "
+              "at the tank farms.")
+    bullet_state = ("The Council plans its next workshop for Tuesday, Dec. 1 "
+                    "at 6:30 p.m.")
+    past_state = ("The City Council took no vote at its Oct. 27 workshop")
     idx = read(docs, "index.html")
     assert banner in idx
     assert bullet_state in idx
+    assert past_state in idx
     assert "require better technology at the tank farms" in idx
     assert "make public what special counsel advises" in idx
     assert "637 Highland Ave" not in idx

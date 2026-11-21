@@ -66,6 +66,7 @@ NAV_BODY = """
         </li>
         <li><a href="press.html">Press</a></li>
         <li><a href="newsletter.html">Newsletter</a></li>
+        <li><a href="share-your-story.html">Share your story</a></li>
         <li><a href="get-involved.html">Get involved</a></li>
         <li><a href="donate.html">Donate</a></li>
         <li><a href="contact.html">Contact</a></li>

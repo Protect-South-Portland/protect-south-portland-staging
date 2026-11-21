@@ -194,16 +194,25 @@ def test_share_your_story_page(docs):
     assert "I remember" in page
     assert "optional image" in page.lower()
     assert "protectsouthportland@gmail.com" in page
-    # the number is not yet assigned: placeholder visible, no dead tel link
-    assert "placeholder-block" in page
-    assert "tel:" not in page, "a tel: link must not ship before the number exists"
-    # reachable from the pages where a reader is deciding to act, but not nav
+    # the number exists now: a real tel: link with the digits stripped of any
+    # invisible directional marks (the number arrived carrying U+202C), an
+    # email fallback, and no placeholder
+    m = re.search(r'href="tel:\+?([0-9]{10,13})"', page)
+    assert m, "the call button must be a tel: link"
+    assert m.group(1) in ("2073702160", "12073702160"), (
+        "the Google Voice number, digits only, with or without the US 1-")
+    assert "(207) 370-2160" in page, "the visible number, formatted"
+    assert "placeholder-block" not in page, "the number era replaced the placeholder"
+    import unicodedata as _uc
+    invisible = [c for c in page if _uc.category(c) in ("Cf", "Cs", "Co", "Cn")]
+    assert not invisible, f"invisible/bidi characters on the page: {[hex(ord(c)) for c in invisible]}"
+    # reachable, and now in the nav too: the page's only action is live
     assert 'href="share-your-story.html"' in read(docs, "get-involved.html")
     assert 'href="share-your-story.html"' in read(docs, "contact.html")
     nav = re.search(r'<nav class="main-nav".*?</nav>',
                     read(docs, "index.html"), re.S).group(0)
-    assert "share-your-story.html" not in nav, (
-        "the nav must not offer a page whose only action is not yet live")
+    assert 'href="share-your-story.html"' in nav, (
+        "the page's action is live; the nav must offer it")
 
 
 def test_nav_structure_after_split(docs):
@@ -618,6 +627,10 @@ def test_internal_links_resolve(docs):
         for href in href_re.findall(read(docs, name)):
             if href.startswith("mailto:") or href.startswith("#"):
                 continue
+            if href.startswith("tel:"):
+                assert re.fullmatch(r"tel:\+?[0-9]{10,13}", href), (
+                    f"{name}: malformed tel link {href}")
+                continue
             if href.startswith("http://") or href.startswith("https://"):
                 continue
             target, _, frag = href.partition("#")
@@ -919,14 +932,22 @@ def test_row48_odor_report_visual_hierarchy(docs):
 
 
 ROW47_COUNCILORS = (
-    # (name as the operator relayed it, seat label as published, mail alias)
-    ("Carter Scott", "District 1", "cscott"),
-    ("Rachael Coleman", "District 2", "rcoleman"),
-    ("Misha Pride", "District 3", "mpride"),
-    ("Jessica Walker", "District 4", "jwalker"),
-    ("Elyse Tipton", "Mayor &mdash; District 5", "etipton"),
-    ("Richard Matthews", "At-Large", "rmatthews"),
-    ("Natalie West", "At-Large", "nwest"),
+    # (name, seat label as published, mail alias, in the prefilled cc list?)
+    ("Carter Scott", "District 1", "cscott", True),
+    # District 2 (Nov 2026): Rachael Coleman holds the seat until the Dec. 7
+    # inauguration; Ellen Clancy (eclancy@) takes it then. Both addresses are
+    # live on the page with the transition stated. The prefilled mailto cc
+    # carries the incoming alias only.
+    ("Ellen Clancy", "District 2", "eclancy", True),
+    # Coleman's line stays on the page until her term ends Dec. 7; her seat
+    # label is None because her display name rides inside the transition
+    # sentence, and she is deliberately absent from the cc list.
+    ("Rachael Coleman", None, "rcoleman", False),
+    ("Misha Pride", "District 3", "mpride", True),
+    ("Jessica Walker", "District 4", "jwalker", True),
+    ("Elyse Tipton", "Mayor &mdash; District 5", "etipton", True),
+    ("Richard Matthews", "At-Large", "rmatthews", True),
+    ("Natalie West", "At-Large", "nwest", True),
 )
 
 
@@ -937,8 +958,11 @@ def test_row47_city_council_roster(docs):
     are gone. past-work.html keeps the historical 2024 list untouched."""
     for name in ("get-involved.html", "act-now.html"):
         page = read(docs, name)
-        for person, seat, alias in ROW47_COUNCILORS:
-            assert f"{person} ({seat})" in page, f"{name}: missing {person} ({seat})"
+        for person, seat, alias, _ in ROW47_COUNCILORS:
+            if seat is None:
+                assert person in page, f"{name}: missing {person}"
+            else:
+                assert f"{person} ({seat})" in page, f"{name}: missing {person} ({seat})"
             assert f'href="mailto:{alias}@southportland.gov"' in page, (
                 f"{name}: missing {alias} mailto")
             assert f">{alias}@southportland.gov</a>" in page, (
@@ -950,8 +974,16 @@ def test_row47_city_council_roster(docs):
         mailtos = re.findall(r'href="(mailto:[^"]+)"', page)
         assert not any(m.lower().endswith("@southportland.org") for m in mailtos), (
             f"{name}: dead-domain mailto survived")
-        # district order: each successive label appears after the previous one
-        positions = [page.index(f"{p} ({s})") for p, s, _ in ROW47_COUNCILORS]
+        # district order: walk forward with a cursor so each roster entry
+        # matches after the previous one. The preamble names the District-2
+        # pair before the list; the cursor skips that, and Coleman's entry
+        # must match inside Clancy's roster line, not the preamble.
+        cursor = 0
+        positions = []
+        for p, s_, _, _ in ROW47_COUNCILORS:
+            needle = f"{p} ({s_})" if s_ else p
+            cursor = page.index(needle, cursor)
+            positions.append(cursor)
         assert positions == sorted(positions), f"{name}: roster out of district order"
     # the general address line sits directly above the list on both pages
     for name in ("get-involved.html", "act-now.html"):
@@ -1629,8 +1661,15 @@ def test_act_now_past_tense_and_one_email_action(docs):
     # one real action: general address plus the seven councilors, prefilled subject
     m = re.search(r'href="(mailto:citycouncil@southportland\.gov\?cc=[^"]+subject=[^"]+)"', act)
     assert m, "act-now.html must carry one prefilled email-the-Council mailto action"
-    for _, _, alias in ROW47_COUNCILORS:
-        assert f"{alias}%40southportland.gov" in m.group(1), alias
+    # District 2 has a transition pair; the cc list carries the incoming
+    # alias (Clancy) and must not carry the outgoing one (Coleman).
+    for _, _, alias, in_cc in ROW47_COUNCILORS:
+        if in_cc:
+            assert f"{alias}%40southportland.gov" in m.group(1), alias
+        else:
+            assert f"{alias}%40southportland.gov" not in m.group(1), (
+                f"{alias} is leaving the seat; the cc list must reach the "
+                "incoming councilor")
     # the ready-to-send message and the roster still ship
     assert "Dear Councilors," in act
     assert "citycouncil@southportland.gov" in act

@@ -934,21 +934,22 @@ def test_row48_odor_report_visual_hierarchy(docs):
 ROW47_COUNCILORS = (
     # (name, seat label as published, mail alias, in the prefilled cc list?)
     ("Carter Scott", "District 1", "cscott", True),
-    # District 2 (Nov 2026): Rachael Coleman holds the seat until the Dec. 7
-    # inauguration; Ellen Clancy (eclancy@) takes it then. Both addresses are
-    # live on the page with the transition stated. The prefilled mailto cc
-    # carries the incoming alias only.
-    ("Ellen Clancy", "District 2", "eclancy", True),
-    # Coleman's line stays on the page until her term ends Dec. 7; her seat
-    # label is None because her display name rides inside the transition
-    # sentence, and she is deliberately absent from the cc list.
-    ("Rachael Coleman", None, "rcoleman", False),
+    # District 2 (operator ruling, 2026-11-21): Rachael Coleman is the
+    # councilor — the current council casts December's pre-inauguration
+    # votes, so the roster and the prefilled mailto reach her. Ellen Clancy
+    # takes the seat at the Dec. 7 inauguration; she is named in the roster
+    # line's transition note WITHOUT an address, because the city has not
+    # published one and an invented alias must never ship.
+    ("Rachael Coleman", "District 2", "rcoleman", True),
     ("Misha Pride", "District 3", "mpride", True),
     ("Jessica Walker", "District 4", "jwalker", True),
     ("Elyse Tipton", "Mayor &mdash; District 5", "etipton", True),
     ("Richard Matthews", "At-Large", "rmatthews", True),
     ("Natalie West", "At-Large", "nwest", True),
 )
+# The incoming District 2 councilor: on the page, never with an address
+# until the city publishes one (southportland.gov directory or Clerk).
+INCOMING_DISTRICT_2 = ("Ellen Clancy", "Dec. 7 inauguration")
 
 
 def test_row47_city_council_roster(docs):
@@ -969,6 +970,14 @@ def test_row47_city_council_roster(docs):
                 f"{name}: missing {alias} visible address")
         assert "citycouncil@southportland.gov" in page, (
             f"{name}: general council address missing")
+        # incoming District 2: named, transition-dated, never addressed.
+        # The city publishes no Clancy address yet; an alias following the
+        # first-initial convention is an inference and must not ship.
+        incoming, transition = INCOMING_DISTRICT_2
+        assert incoming in page, f"{name}: missing incoming member {incoming}"
+        assert transition in page, f"{name}: missing the {transition} note"
+        assert "eclancy" not in page, (
+            f"{name}: the incoming member carries an unverified address")
         assert "Linda Cohen" not in page, f"{name}: retired name Linda Cohen"
         assert "Steven Riley" not in page, f"{name}: retired name Steven Riley"
         mailtos = re.findall(r'href="(mailto:[^"]+)"', page)
@@ -1661,15 +1670,13 @@ def test_act_now_past_tense_and_one_email_action(docs):
     # one real action: general address plus the seven councilors, prefilled subject
     m = re.search(r'href="(mailto:citycouncil@southportland\.gov\?cc=[^"]+subject=[^"]+)"', act)
     assert m, "act-now.html must carry one prefilled email-the-Council mailto action"
-    # District 2 has a transition pair; the cc list carries the incoming
-    # alias (Clancy) and must not carry the outgoing one (Coleman).
+    # The cc list is the current council: every roster alias, and nothing
+    # else. In particular no unverified alias for an incoming member.
     for _, _, alias, in_cc in ROW47_COUNCILORS:
-        if in_cc:
-            assert f"{alias}%40southportland.gov" in m.group(1), alias
-        else:
-            assert f"{alias}%40southportland.gov" not in m.group(1), (
-                f"{alias} is leaving the seat; the cc list must reach the "
-                "incoming councilor")
+        assert f"{alias}%40southportland.gov" in m.group(1), alias
+    assert "eclancy%40southportland.gov" not in m.group(1), (
+        "the cc list must reach the current council, and an incoming "
+        "member's unverified alias must not ride along")
     # the ready-to-send message and the roster still ship
     assert "Dear Councilors," in act
     assert "citycouncil@southportland.gov" in act

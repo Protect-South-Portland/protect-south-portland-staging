@@ -2,6 +2,10 @@
 
 Static HTML/CSS site for Protect South Portland, generated into `docs/` by `tools/build.py`. GitHub Actions on this repo only runs the test suite, a build smoke check, and the non-blocking scheduled staging audit (issues only — nothing in this repo's CI deploys). The public site lives on the Pages mirrors (`cristoslc/protect-south-portland-published`, plus the staging rehearsal `cristoslc/protect-south-portland-staging`) and is updated only through `tools/publish.py` under the staging-first deployment policy below.
 
+## Hard constraint (operator approval, 2026-11-21): the site is the doc's page set
+
+`protect_south_portland_website_copy` (with operator-added pages named in-thread, e.g. Share your story) is the sanctioned surface list. A page not in the doc does not get built, a meeting-notes wishlist item is not page authority, and no agent-authored "curation" copy (entry rules, taxonomies, start-here lists) ships anywhere. The library/press/history pages built 2026-11-05/06 against this rule were stripped 2026-11-21. Read `AGENTS-RETRO-agent-invented-pages.md` before creating any page.
+
 ## Commands
 
 - Build: `python3 tools/build.py`

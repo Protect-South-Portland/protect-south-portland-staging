@@ -28,6 +28,11 @@ PAGES = os.path.join(SITE, "pages")
 REDIRECTS = {
     "oil-tank-emissions.html": "tank-farms.html",
     "vocs.html": "tank-farms.html#health-effects-of-vocs",
+    # 2026-11-21 strip-back (operator approval): these agent-built pages left
+    # the site; their URLs redirect so no inbound link or bookmark breaks.
+    "tank-farms-history.html": "tank-farms.html#how-we-got-here",
+    "library.html": "tank-farms.html#reference-documents",
+    "press.html": "act-now.html",
 }
 
 META_RE = re.compile(r'<!--\s*meta:\s*title="(?P<title>[^"]*)"\s*\|\s*desc="(?P<desc>[^"]*)"\s*-->\s*\n?')
@@ -51,7 +56,6 @@ NAV_BODY = """
           <ul class="submenu">
             <li><a href="tank-farms.html">South Portland Tank Farms</a></li>
             <li><a href="coastal-flooding.html">Coastal Flooding</a></li>
-            <li><a href="library.html">Library</a></li>
             <li class="has-sub has-flyout">
               <a href="past-work.html" aria-haspopup="true" aria-expanded="false">Past work</a>
               <ul class="submenu flyout">
@@ -64,7 +68,6 @@ NAV_BODY = """
             </li>
           </ul>
         </li>
-        <li><a href="press.html">Press</a></li>
         <li><a href="newsletter.html">Newsletter</a></li>
         <li><a href="share-your-story.html">Share your story</a></li>
         <li><a href="get-involved.html">Get involved</a></li>
@@ -97,8 +100,6 @@ FOOTER_BODY = """
         <li><a href="fertilizer-ban.html">Fertilizer ban</a></li>
         <li><a href="coastal-flooding.html">Coastal flooding</a></li>
         <li><a href="past-work.html">Past work</a></li>
-        <li><a href="library.html">Library</a></li>
-        <li><a href="press.html">Press</a></li>
         <li><a href="yard-south-proposal.html">Yard South proposal</a></li>
         <li><a href="clear-skies.html">Clear Skies</a></li>
         <li><a href="pesticides.html">Pesticides</a></li>

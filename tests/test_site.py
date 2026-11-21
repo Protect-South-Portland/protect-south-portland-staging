@@ -155,7 +155,11 @@ def test_expected_pages_built(docs):
 
 # merged campaign pages write tiny meta-refresh stubs instead of full shells;
 # shell-level tests skip them.
-REDIRECT_PAGES = {"oil-tank-emissions.html", "vocs.html"}
+REDIRECT_PAGES = {
+    "oil-tank-emissions.html", "vocs.html",
+    # 2026-11-21 strip-back: agent-built pages retired to redirects
+    "tank-farms-history.html", "library.html", "press.html",
+}
 
 
 def test_merged_redirects(docs):
@@ -678,7 +682,7 @@ def test_sprague_complaint_asset_mirrored(docs):
     live Wix /global page links ("Read the complaint>>") is mirrored into
     site/assets/files/ and anchored from the Sprague paragraph, which moved
     to tank-farms-history.html in the Nov. 2026 cut, so it survives Wix going dark."""
-    tf = read(docs, "tank-farms-history.html")
+    tf = read(docs, "tank-farms.html")
     assert "Read the complaint (PDF)" in tf, "anchor text missing"
     hrefs = re.findall(r'href="(assets/files/[^"]*\.pdf)"', tf)
     sprague = [h for h in hrefs if "sprague-doj-complaint" in h]
@@ -1008,6 +1012,84 @@ def test_row47_city_council_roster(docs):
         assert general < first, f"{name}: general address must precede the list"
 
 
+
+def test_strip_back_to_doc_pages(docs):
+    """Operator approval, 2026-11-21: the site strips back to the pages the
+    website-copy doc describes. The three agent-built surfaces (Library,
+    Press, How-we-got-here) are retired: library and press never existed in
+    the doc, and the history split was an agent invention the doc writes as
+    one long campaign page. Their URLs redirect so no inbound link breaks.
+
+    The doc's page set is the sanctioned surface list; nothing new may join
+    it without operator direction that names the page.
+    """
+    # the retired URLs are meta-refresh stubs to real destinations
+    stubs = {
+        "library.html": "tank-farms.html#reference-documents",
+        "press.html": "act-now.html",
+        "tank-farms-history.html": "tank-farms.html#how-we-got-here",
+    }
+    for src, dest in stubs.items():
+        stub = read(docs, src)
+        assert f"url={dest}" in stub, f"{src} must redirect to {dest}"
+        assert 'class="masthead"' not in stub and len(stub) < 800, src
+    # the nav offers only the doc's pages: no library, no press
+    idx = read(docs, "index.html")
+    nav = re.search(r'<nav class="main-nav".*?</nav>', idx, re.S).group(0)
+    assert 'href="library.html"' not in nav
+    assert 'href="press.html"' not in nav
+    footer = idx[idx.index('class="footer'):]
+    assert 'href="library.html"' not in footer
+    assert 'href="press.html"' not in footer
+    # no live page links to a retired URL
+    for name in html_files(docs):
+        if name in REDIRECT_PAGES:
+            continue
+        page = read(docs, name)
+        for gone in stubs:
+            assert f'href="{gone}"' not in page, f"{name} links retired {gone}"
+    # the fold: the history content, the archive note, and the 600-ton
+    # verbatim record all live on the campaign page now
+    tank = read(docs, "tank-farms.html")
+    for heading in ("How we got here: EPA and Global Partners in court",
+                    "Selected reading", "EPA action",
+                    "Protect South Portland&rsquo;s role",
+                    "Clean Air Advisory Committee", "DEP air quality findings",
+                    "Resolve LD 1915", "Reference documents", "LD 163",
+                    "Rulemaking", "LD 71", "Media coverage"):
+        assert heading in tank, f"campaign page missing {heading}"
+    # the archive-note ruling survives the fold: one standing note above the
+    # record, no inline corrections, superseded figure verbatim and unique
+    assert "An archive, not a snapshot." in tank
+    assert "Some figures in it are now out of date." in tank
+    assert tank.count("An archive, not a snapshot.") == 1
+    assert tank.index("An archive, not a snapshot.") < \
+        tank.index("How we got here: EPA and Global Partners in court")
+    assert "600 tons" in tank
+    built = []
+    for root, _dirs, files in os.walk(docs):
+        for fname in files:
+            if fname.endswith(".html"):
+                with open(os.path.join(root, fname), encoding="utf-8") as f:
+                    built.append(f.read())
+    assert sum(t.count("600 tons") for t in built) == 1, (
+        "the verbatim 600-ton figure must survive exactly once")
+    # the press-kit cap ruling survives the retirement, scoped as ruled: the
+    # 600-ton VOC / 104-ton HAP cap stays off pages an agent authors. The
+    # archived LD 163 paragraph keeps its original figures verbatim (the
+    # archive-note ruling), so the ban is on NEW agent copy, not the record.
+    # The strongest honest form: the cap figure appears nowhere except
+    # inside the archived record section, exactly once.
+    tank_body = tank[tank.index("An archive, not a snapshot."):]
+    assert tank_body.count("104 tons") == 1, (
+        "the cap figure must appear only in the archived record")
+    for name in html_files(docs):
+        if name in REDIRECT_PAGES or name == "tank-farms.html":
+            continue
+        assert "104 tons" not in read(docs, name), (
+            f"{name}: agent-authored copy carries the cap figure")
+
+
 def test_about_tense_fixes(docs):
     ab = read(docs, "about.html")
     assert "fifth year" not in ab
@@ -1027,8 +1109,9 @@ def test_where_things_stand_section(docs):
     assert "DocumentCenter/View/5116" in ot
     assert "DocumentCenter/View/4819" in ot
     assert "fence-line data" in ot
-    # the DEP findings paragraph moved to the history page with the rest of the run
-    assert "spo-voc-monitor.html" in read(docs, "tank-farms-history.html")
+    # 2026-11-21 strip-back: the history run folded back into the campaign
+    # page, so the DEP findings link lives there again
+    assert "spo-voc-monitor.html" in ot
 
 
 def test_wix_pdfs_mirrored_locally(docs):
@@ -1727,115 +1810,3 @@ def test_punchlist_a5_campaign_card_is_current(docs):
     assert "where the campaign stands" in page
     assert "Oct. 27 City Council workshop" not in page
 
-
-def test_punchlist_a2_a3_library_page(docs):
-    # Nov. 5 meeting, A2 and A3: a library landing page with an entry rule, the
-    # current work, the served documents, a white-papers block and the archive.
-    page = read(docs, "library.html")
-    assert "Resource library" in page
-    assert "What qualifies:" in page
-    # Nov. 6 defect fix: the rule and the list must agree. The list carries the
-    # two newsletter PDFs, which are campaign publications rather than filings,
-    # so the rule names campaign publications explicitly.
-    assert "campaign publication" in page
-    assert "newsletter-2020-12-13.pdf" in page
-    for heading in ("Start here", "Reference documents", "White papers", "Archive"):
-        assert heading in page, heading
-    assert 'href="tank-farms.html"' in page
-    assert 'href="coastal-flooding.html"' in page
-    assert 'href="act-now.html"' in page
-    assert 'href="past-work.html"' in page
-    assert 'href="tank-farms-history.html"' in page
-    # reference documents: every served PDF except the event flyer is listed
-    for name in ("maine-dep-report-ld1915.pdf", "psp-submission-enr.pdf",
-                 "falatko-comments.pdf", "mikulka-comments.pdf",
-                 "sprague-doj-complaint.pdf", "clear-skies-ordinance-2014.pdf",
-                 "fertilizer-ordinance-2020.pdf", "pesticide-ordinance-ch32.pdf",
-                 "pesticide-ordinance-faqs.pdf", "newsletter-2020-12-13.pdf",
-                 "newsletter-2021-01-13.pdf"):
-        assert f"assets/files/{name}" in page, name
-    # A3: the HEM-3 summary is labeled as a summary, not a designed white paper
-    assert "hem3-report-summary.pdf" in page
-    assert "18-page summary" in page
-    assert "white paper" not in page.lower() or "White papers" in page
-
-
-def test_punchlist_a1_history_moved_not_deleted(docs):
-    # A1: the background run left tank-farms and lives on the history page.
-    tank = read(docs, "tank-farms.html")
-    history = read(docs, "tank-farms-history.html")
-    moved = ("Background: EPA and Global Partners in court", "Selected reading",
-             "EPA action", "Protect South Portland&rsquo;s role",
-             "Clean Air Advisory Committee", "DEP air quality findings",
-             "Resolve LD 1915", "Reference documents", "LD 163", "Rulemaking",
-             "LD 71", "Media coverage")
-    for heading in moved:
-        assert heading in history, f"history page missing {heading}"
-        assert heading not in tank, f"tank-farms still carries {heading}"
-    # the spine stays on the campaign page
-    assert "120 large petroleum tanks" in tank
-    assert "Health effects of VOCs" in tank
-    assert "Cancer risk" in tank
-    assert 'href="tank-farms-history.html"' in tank
-    # the action callout sits above the fold, not after the history run
-    assert tank.index("Now is the time to act") < tank.index("120 large petroleum tanks")
-
-
-def test_archive_page_carries_one_standing_note(docs):
-    # Operator ruling, 2026-11-06: the archive keeps superseded figures verbatim.
-    # No inline correction and no footnote on the sentence itself. Instead the
-    # page carries one standing note above the record, saying what the page is,
-    # and linking to the current numbers on tank-farms.html.
-    page = read(docs, "tank-farms-history.html")
-    assert "An archive, not a snapshot." in page
-    assert "Some figures in it are now out of date." in page
-    assert "superseded" not in page
-    assert 'href="tank-farms.html"' in page
-    note = page.index("An archive, not a snapshot.")
-    first_record = page.index("Background: EPA and Global Partners in court")
-    assert note < first_record, "the standing note must sit above the record"
-    assert page.count("An archive, not a snapshot.") == 1
-    # the ruling is not an inline annotation: the superseded figure itself is
-    # untouched, and it survives exactly once in the built tree
-    assert "600 tons" in page
-    built = []
-    for root, _dirs, files in os.walk(docs):
-        for name in files:
-            if name.endswith(".html"):
-                with open(os.path.join(root, name), encoding="utf-8") as f:
-                    built.append(f.read())
-    occurrences = sum(text.count("600 tons") for text in built)
-    assert occurrences == 1, f"expected one verbatim 600-ton figure, found {occurrences}"
-
-
-def test_punchlist_a4_press_kit(docs):
-    # Nov. 6 defect fix: the permitted 600-ton VOC / 104-ton HAP cap is NOT on
-    # this page. The campaign's own CTA audit (psp/cta-audit-2026-11-02.md, s3)
-    # says the cap cannot be published without the actual-emissions annotation,
-    # and that annotation is a new assertion needing operator and original-author
-    # sign-off plus a check on the mayor's 550 figure. A press kit is the page a
-    # reporter checks first, so the cap stays off until that sign-off exists.
-    # Do not re-add it here without the annotation and the sign-off.
-    page = read(docs, "press.html")
-    assert "Press kit" in page
-    assert "120 large petroleum tanks" in page
-    assert "12 times" in page
-    assert "600 tons" not in page
-    assert "104 tons" not in page
-    assert "southportland.gov/522/Air-Quality-Concerns-Monitoring" in page
-    assert "maine.gov/dep/air/monitoring/spo-voc-monitor.html" in page
-    assert 'href="library.html"' in page
-    assert 'href="mailto:protectsouthportland@gmail.com"' in page
-
-
-def test_punchlist_new_pages_in_nav_and_footer(docs):
-    for name in html_files(docs):
-        if name in REDIRECT_PAGES:
-            continue
-        page = read(docs, name)
-        nav = re.search(r'<nav class="main-nav".*?</nav>', page, re.S).group(0)
-        assert 'href="library.html"' in nav, f"{name}: library missing from nav"
-        assert 'href="press.html"' in nav, f"{name}: press missing from nav"
-        footer = page[page.index('class="footer'):]
-        assert 'href="library.html"' in footer, f"{name}: library missing from footer"
-        assert 'href="press.html"' in footer, f"{name}: press missing from footer"

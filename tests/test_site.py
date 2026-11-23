@@ -70,6 +70,7 @@ EXTERNAL_ALLOWLIST = (
     "pressherald.com",
     "insideclimatenews.org",
     "justice.gov",
+    "cdc.gov",
     "maine.gov",
     "mainelegislature.org",
     "legiscan.com",

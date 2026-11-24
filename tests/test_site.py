@@ -1811,3 +1811,32 @@ def test_punchlist_a5_campaign_card_is_current(docs):
     assert "where the campaign stands" in page
     assert "Oct. 27 City Council workshop" not in page
 
+
+
+def test_buttons_keep_breathing_room(docs):
+    """Recurring failure mode, fixed at source 2026-11-23.
+
+    A call-to-action wrapped in a <p> whose margins were zeroed sat flush
+    against the text above and below it, which read as a spacing bug rather
+    than a button. Two guards: no paragraph that wraps a button may zero its
+    own margins, and the .btn rule must carry its own vertical margin and
+    padding so no ancestor can squash it.
+    """
+    import re as _re
+    flush = _re.compile(
+        r'<p[^>]*style="[^"]*margin[^"]*0[^"]*"[^>]*>\s*<a class="btn', _re.I)
+    for name in html_files(docs):
+        m = flush.search(read(docs, name))
+        assert not m, (
+            f"{name}: a button wrapped in a zero-margin paragraph: "
+            f"{m.group(0)[:120] if m else ''}")
+    css = open(os.path.join(ROOT, "site", "styles.css"), encoding="utf-8").read()
+    rule = _re.search(r"\.btn \{(.*?)\}", css, _re.S)
+    assert rule, ".btn rule missing from styles.css"
+    body = rule.group(1)
+    margin = _re.search(r"margin:\s*([0-9.]+)(rem|px)\s+0", body)
+    assert margin, ".btn must declare its own vertical margin"
+    assert float(margin.group(1)) > 0, ".btn vertical margin must be non-zero"
+    padding = _re.search(r"padding:\s*([0-9.]+)px", body)
+    assert padding and int(padding.group(1)) >= 8, (
+        ".btn needs at least 8px of vertical padding")

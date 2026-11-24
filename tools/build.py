@@ -48,9 +48,6 @@ NAV_BODY = """
     <label class="nav-toggle-label" for="nav-toggle" aria-label="Toggle navigation">MENU</label>
     <nav class="main-nav" aria-label="Main">
       <ul>
-        <li><a href="index.html">Home</a></li>
-        <li class="nav-cta"><a href="act-now.html">Act now</a></li>
-        <li><a href="about.html">About</a></li>
         <li class="has-sub">
           <a href="our-campaigns.html" aria-haspopup="true" aria-expanded="false">Our work</a>
           <ul class="submenu">
@@ -68,11 +65,11 @@ NAV_BODY = """
             </li>
           </ul>
         </li>
-        <li><a href="newsletter.html">Newsletter</a></li>
+        <li><a href="about.html">About</a></li>
         <li><a href="share-your-story.html">Share your story</a></li>
-        <li><a href="get-involved.html">Get involved</a></li>
-        <li><a href="donate.html">Donate</a></li>
+        <li><a href="newsletter.html">Newsletter</a></li>
         <li><a href="contact.html">Contact</a></li>
+        <li class="nav-cta"><a href="act-now.html">Act now</a></li>
       </ul>
     </nav>
   </div>
@@ -193,7 +190,10 @@ def build(out_dir: str) -> list:
         title = m.group("title")
         desc = m.group("desc")
         body = raw[m.end():].strip()
-        html = SHELL.format(title=title, desc=desc, nav=NAV_BODY, body=body, footer=FOOTER_BODY)
+        nav = NAV_BODY
+        if f'<a href="{name}">' in nav:
+            nav = nav.replace(f'<a href="{name}">', f'<a href="{name}" aria-current="page">', 1)
+        html = SHELL.format(title=title, desc=desc, nav=nav, body=body, footer=FOOTER_BODY)
         dest = os.path.join(out_dir, name)
         open(dest, "w", encoding="utf-8").write(html)
         written.append(name)

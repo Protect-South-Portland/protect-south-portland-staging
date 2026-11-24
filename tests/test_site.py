@@ -1224,9 +1224,46 @@ def test_favicon_present(docs):
 
 
 def test_cname_ready_for_domain_flip(docs):
+    """docs/CNAME: the apex staging plan is superseded; the file returns at cutover.
+
+    Two decisions, both on the record here. The OLD domain-flip plan (ledger
+    row 4 era) staged the apex hostname protectsouthportland.org as a tracked
+    docs/CNAME, and this test pinned the file's existence and content. The
+    fork model (2026-11-24 migration plan, section 5) supersedes that plan: a
+    branch deployment reads the served directory's CNAME file as its custom
+    domain, so a tracked file would make Pages claim the apex the moment it
+    starts serving main, at a moment nobody chose. The file is untracked and
+    gitignored, and the domain is set deliberately at cutover, when docs/CNAME
+    returns committed with www.protectsouthportland.org, the live canonical —
+    not the apex.
+
+    Pinned in every checkout: the ignore rule covers the path, and the file is
+    not in the tracked tree. If the operator's local checkout still carries
+    the staged-flip file, it reads the apex unchanged — a local artifact like
+    .env until the cutover PR replaces it.
+    """
+    import subprocess
+    ignored = subprocess.run(
+        ["git", "check-ignore", "-q", "docs/CNAME"],
+        cwd=ROOT, capture_output=True)
+    assert ignored.returncode == 0, (
+        "docs/CNAME must stay covered by the ignore rule: the fork model "
+        "sets the domain deliberately at cutover, never via a file that "
+        "rides back into the tracked tree by accident")
+    tracked = subprocess.run(
+        ["git", "ls-files", "docs/CNAME"],
+        cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    assert tracked == [], (
+        "docs/CNAME tracked: a branch deployment reads it as the custom "
+        "domain, so Pages would claim its hostname the instant it serves "
+        "main — commit the cutover-time CNAME (www.protectsouthportland.org) "
+        "deliberately, in the cutover PR")
     cname = os.path.join(ROOT, "docs", "CNAME")
-    assert os.path.exists(cname)
-    assert open(cname).read().strip() == "protectsouthportland.org"
+    if os.path.exists(cname):
+        # local staged-flip artifact; a fresh CI checkout does not carry it
+        assert open(cname, encoding="utf-8").read().strip() == "protectsouthportland.org", (
+            "the staged-flip file still reads the apex; the cutover PR "
+            "replaces it with www.protectsouthportland.org")
 
 
 def test_every_page_shell_complete(docs):
@@ -3355,3 +3392,27 @@ def test_row86_brace_blocks_are_guidance_not_copy(docs):
         markup = read(docs, name)
         assert "{{" not in markup and "}}" not in markup, (
             f"{name}: a brace block's delimiters reached the built tree")
+
+
+def test_docs_serve_tree_shape_pins_the_pages_serve_config():
+    """docs/ is the tree GitHub Pages will serve from main (fork model).
+
+    Two shape facts pin the serving config (2026-11-24 migration): .nojekyll
+    must be committed, because Pages must serve the built files verbatim with
+    no build step; and docs/CNAME must NOT be tracked, because a tracked
+    CNAME file is authoritative for branch deploys and would make Pages
+    claim its hostname the moment it starts serving main, at a moment nobody
+    chose. The domain file is committed deliberately at the cutover instead.
+    """
+    import subprocess
+    tracked = subprocess.run(
+        ["git", "ls-files", "docs/CNAME", "docs/.nojekyll"],
+        cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
+    assert "docs/.nojekyll" in tracked, (
+        "docs/.nojekyll must be committed: Pages serves the built tree "
+        "verbatim, with no Jekyll pass over it")
+    assert "docs/CNAME" not in tracked, (
+        "docs/CNAME tracked: a branch deployment reads it as the custom "
+        "domain, so Pages would claim its hostname the instant it serves "
+        "main — the domain is set deliberately at cutover, never by a file "
+        "that rides along in the tree")
